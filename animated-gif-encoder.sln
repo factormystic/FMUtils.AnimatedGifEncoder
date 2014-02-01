@@ -1,0 +1,24 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 11.00
+# Visual Studio 2010
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "animated-gif-encoder", "animated-gif-encoder\animated-gif-encoder.csproj", "{440F1851-9338-4484-B1C7-DCA3ADAACA10}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x86 = Debug|x86
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{440F1851-9338-4484-B1C7-DCA3ADAACA10}.Debug|x86.ActiveCfg = Debug|x86
+		{440F1851-9338-4484-B1C7-DCA3ADAACA10}.Debug|x86.Build.0 = Debug|x86
+		{440F1851-9338-4484-B1C7-DCA3ADAACA10}.Release|x86.ActiveCfg = Release|x86
+		{440F1851-9338-4484-B1C7-DCA3ADAACA10}.Release|x86.Build.0 = Release|x86
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		BuildVersion_AssemblyInfoFilename = animated-gif-encoder\Properties\AssemblyInfo.cs
+		BuildVersion_UseGlobalSettings = True
+	EndGlobalSection
+EndGlobal
