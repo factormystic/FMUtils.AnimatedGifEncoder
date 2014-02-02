@@ -57,7 +57,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Enums.cs" />
-    <Compile Include="FormatConstants.cs" />
+    <Compile Include="GifFileFormat.cs" />
     <Compile Include="Frame.cs" />
     <Compile Include="Gif89a.cs" />
     <Compile Include="LZWEncoder.cs" />
