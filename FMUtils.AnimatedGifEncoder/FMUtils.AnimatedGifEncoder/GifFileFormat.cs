@@ -59,39 +59,41 @@ namespace FMUtils.AnimatedGifEncoder
             output.WriteByte(4);
 
             byte transp = 0x00;
-            byte disposal_method = 0x00;
+            var disposal = DisposalMethod.Unspecified;
 
             if (frame.Transparent != Color.Empty)
             {
                 transp = 1;
 
                 // force clear if using transparent color
-                disposal_method = 2;
+                disposal = DisposalMethod.RestoreBackgroundColor;
             }
 
-            if (frame.dispose != 0)
+            if (frame.Dispose != DisposalMethod.Unspecified)
             {
-                //disposal_method = frame.dispose & 7; // user override
-                disposal_method = frame.dispose;
+                disposal = frame.Dispose;
             }
-
-            //disposal_method <<= 2;
 
             // packed fields
-            byte reserved = 0x00 << 7; // 1:3 reserved
-            byte disposal = (byte)(disposal_method << 4); // 4:6 disposal
-              byte user =  0x00 << 1; // 7 user input - 0 = none
-              byte transparent = (byte)(transp << 0); // 8 transparency flag
+            // 1:3 reserved
+            // 4:6 disposal
+            // 7 user input - 0 = none
+            // 8 transparency flag
 
-              output.WriteByte((byte)(reserved | disposal | user | transparent));
+            byte reserved = 0x00 << 7;
+            byte dispose = (byte)((byte)disposal << 4);
+            byte user = 0x00 << 1;
+            byte transparent = (byte)(transp << 0);
 
-              // delay in hundredths
-              WriteShort(output, (ushort)(frame.Delay / 10));
+            output.WriteByte((byte)(reserved | dispose | user | transparent));
+
+            // delay in hundredths
+            WriteShort(output, (ushort)(frame.Delay / 10));
 
             // transparent color index
             output.WriteByte(transIndex);
 
-            output.WriteByte(GifFileFormat.BLOCK_TERMINATOR); 
+            output.WriteByte(GifFileFormat.BLOCK_TERMINATOR);
         }
 
         /// <summary>
