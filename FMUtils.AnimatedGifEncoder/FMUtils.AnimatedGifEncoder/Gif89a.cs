@@ -92,15 +92,15 @@ namespace FMUtils.AnimatedGifEncoder
 
         Tuple<byte[], byte[], bool[]> AnalyzePixels(Frame frame)
         {
-            byte[] pixels = frame.GetPixelBytes();
-            int sample = (int)frame.Quality;
+            byte[] PixelBytes = frame.GetPixelBytes();
 
             int len = pixels.Length;
             int nPix = len / 3;
             var indexedPixels = new byte[nPix];
+            var indexedPixels = new byte[PixelBytes.Length / 3];
             var usedEntry = new bool[256];
 
-            var quantizer = new NeuQuant(pixels, len, sample);
+            var quantizer = new NeuQuant(PixelBytes, PixelBytes.Length, (int)frame.Quality);
             var ColorTable = quantizer.process();
 
             // convert map from BGR to RGB
@@ -113,9 +113,9 @@ namespace FMUtils.AnimatedGifEncoder
 
             // map image pixels to new palette
             int k = 0;
-            for (int i = 0; i < nPix; i++)
+            for (int i = 0; i < indexedPixels.Length; i++)
             {
-                int index = quantizer.map(pixels[k++] & 0xff, pixels[k++] & 0xff, pixels[k++] & 0xff);
+                int index = quantizer.map(PixelBytes[k++] & 0xff, PixelBytes[k++] & 0xff, PixelBytes[k++] & 0xff);
                 usedEntry[index] = true;
                 indexedPixels[i] = (byte)index;
             }
