@@ -104,7 +104,7 @@ namespace FMUtils.AnimatedGifEncoder
         /// image must fit within the boundaries of the Logical Screen, as defined
         /// in the Logical Screen Descriptor.
         /// </summary>
-        internal static void WriteImageDescriptor(Stream output, ushort width, ushort height, bool firstFrame)
+        internal static void WriteImageDescriptor(Stream output, ushort width, ushort height, int colorTableLength, bool firstFrame)
         {
             output.WriteByte(GifFileFormat.IMAGE_DESCRIPTOR);
 
@@ -124,19 +124,19 @@ namespace FMUtils.AnimatedGifEncoder
             }
             else
             {
-                // specify normal LCT
-                // 1 local color table 1=yes
+                // packed fields
+                // 1 local color table 1=yes, specify normal LCT
                 // 2 interlace - 0=no
                 // 3 sorted - 0=no
                 // 4-5 reserved
-                // 6-8 size of color table
+                // 6-8 size of color table (see GCT for explanation)
 
                 byte lct = 0x1 << 7;
                 byte interlace = 0 << 6;
                 byte sorted = 0 << 5;
-                byte table_size = 0x7 << 0;
+                byte size = (byte)(Math.Log(colorTableLength / 3, 2) - 1);
 
-                output.WriteByte((byte)(lct | interlace | sorted | table_size));
+                output.WriteByte((byte)(lct | interlace | sorted | size));
             }
         }
 
@@ -147,17 +147,34 @@ namespace FMUtils.AnimatedGifEncoder
         /// necessary to define the area of the display device within which the
         /// images will be rendered.
         /// </summary>
-        internal static void WriteLogicalScreenDescriptor(Stream output, ushort width, ushort height)
+        internal static void WriteLogicalScreenDescriptor(Stream output, ushort width, ushort height, int colorTableLength)
         {
             // logical screen size
             WriteShort(output, width);
             WriteShort(output, height);
 
             // packed fields
-            byte gct = 0x1 << 7; // 1 : global color table flag = 1 (gct used)
-            byte res = 0x7 << 4; // 2-4 : color resolution = 7
-            byte sort = 0x0 << 3; // 5 : gct sort flag = 0
-            byte size = 0x7 << 0; // 6-8 : gct size
+            // 1 : global color table flag = 1 (gct used)
+            // 2-4 : color resolution = 7
+            // 5 : gct sort flag = 0
+            // 6-8 : gct size
+
+            // the color table size calculation is going backwards from the size calculation defined in the spec:
+            // 3 x 2^(Size of Global Color Table + 1) => Log2(colorTableLength / 3) - 1
+            
+            // it's especially irritating because this means the length of the color table byte
+            // array may ONLY EVER BE: 6, 12, 24, 48, 96, 192, 384, or 768 bytes long!
+            // This makes optimizing modern gifs for less than 256 colors kind of pointless,
+            // since you'd have to half the number of colors down to 128 to actually write out a smaller color table
+            
+            // even though this code supports color tables of any valid width, it probably doesn't need to
+            // the alternate implementation would be to simply always claim the max color table length,
+            // and then zero-pad the color table byte array to 3*256 bytes long
+
+            byte gct = 0x1 << 7;
+            byte res = 0x7 << 4;
+            byte sort = 0x0 << 3;
+            byte size = (byte)(Math.Log(colorTableLength / 3, 2) - 1);
 
             output.WriteByte((byte)(gct | res | sort | size));
 
@@ -169,16 +186,24 @@ namespace FMUtils.AnimatedGifEncoder
         }
 
         /// <summary>
-        /// Writes color table
+        /// 19. Global Color Table.
+        /// 21. Local Color Table.
+        /// 
+        /// A color table is a sequence of bytes representing red-green-blue color
+        /// triplets. Its presence is marked by the Local/Global Color Table Flag
+        /// being set to 1 in the Image Descriptor (for a Local Color Table) or
+        /// Logical Screen Descriptor (for the Global Color Table); if present,
+        /// the contains a number of bytes equal to
+        /// 
+        ///                      3x2^(Size of Color Table+1)
+        /// (Note: "Size of Color Table" is 0..7, defined ID/LSD immediately prior)
+        /// 
+        /// If present, this color table temporarily becomes the active color table
+        /// and the following image should be processed using it.
         /// </summary>
-        internal static void WriteColorTable(Stream output, byte[] colorTab)
+        internal static void WriteColorTable(Stream output, byte[] colorTable)
         {
-            output.Write(colorTab, 0, colorTab.Length);
-            int n = (3 * 256) - colorTab.Length;
-            for (int i = 0; i < n; i++)
-            {
-                output.WriteByte(0);
-            }
+            output.Write(colorTable, 0, colorTable.Length);
         }
 
         /// <summary>

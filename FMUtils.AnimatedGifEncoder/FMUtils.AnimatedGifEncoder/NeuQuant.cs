@@ -161,21 +161,10 @@ namespace FMUtils.AnimatedGifEncoder
             }
         }
 
-        public byte[] colorMap()
+        public int[][] colorMap()
         {
-            byte[] map = new byte[3 * netsize];
-            int[] index = new int[netsize];
-            for (int i = 0; i < netsize; i++)
-                index[network[i][3]] = i;
-            int k = 0;
-            for (int i = 0; i < netsize; i++)
-            {
-                int j = index[i];
-                map[k++] = (byte)(network[j][0]);
-                map[k++] = (byte)(network[j][1]);
-                map[k++] = (byte)(network[j][2]);
-            }
-            return map;
+
+            return network;
         }
 
         /*
@@ -402,7 +391,7 @@ namespace FMUtils.AnimatedGifEncoder
             return (best);
         }
 
-        public byte[] process()
+        public int[][] process()
         {
             learn();
             unbiasnet();

@@ -39,7 +39,9 @@ namespace FMUtils.AnimatedGifEncoder
         /// default, and produces good color mapping at reasonable speeds. Values
         /// greater than 20 do not yield significant improvements in speed.
         /// </summary>
-        public ColorQuantizationQuality Quality = ColorQuantizationQuality.Good;
+        public ColorQuantizationQuality Quality = ColorQuantizationQuality.Reasonable;
+
+        internal byte[] PixelBytes { get; set; }
 
 
         public Frame(string filename, ushort delay = 67, ColorQuantizationQuality quality = ColorQuantizationQuality.Reasonable)
@@ -94,5 +96,7 @@ namespace FMUtils.AnimatedGifEncoder
             this.Image.UnlockBits(ImgData);
             return PixelBytes;
         }
+
+        public byte transIndex = 0;
     }
 }

@@ -43,23 +43,23 @@ namespace FMUtils.AnimatedGifEncoder
             if (this.Size == Size.Empty)
                 this.Size = frame.Image.Size;
 
+            frame.PixelBytes = frame.GetPixelBytes();
+
             // build color table & map pixels
             var analysis = this.AnalyzePixels(frame);
             var indexedPixels = analysis.Item1;
             var ColorTable = analysis.Item2;
-            var usedEntry = analysis.Item3;
 
             // get closest match to transparent color if specified
-            byte transIndex = 0;
             if (frame.Transparent != Color.Empty)
             {
-                transIndex = getClosestPaletteIndex(frame.Transparent, ColorTable, usedEntry);
+                frame.transIndex = getClosestPaletteIndex(frame.Transparent, ColorTable);
             }
 
             if (this.IsFirstFrame)
             {
                 // logical screen descriptior
-                GifFileFormat.WriteLogicalScreenDescriptor(this.output, (ushort)this.Size.Width, (ushort)this.Size.Height);
+                GifFileFormat.WriteLogicalScreenDescriptor(this.output, (ushort)this.Size.Width, (ushort)this.Size.Height, ColorTable.Length);
 
                 // global color table
                 GifFileFormat.WriteColorTable(this.output, ColorTable);
@@ -72,10 +72,10 @@ namespace FMUtils.AnimatedGifEncoder
             }
 
             // write graphic control extension
-            GifFileFormat.WriteGraphicControlExtension(output, frame, transIndex);
+            GifFileFormat.WriteGraphicControlExtension(output, frame, frame.transIndex);
 
             // image descriptor
-            GifFileFormat.WriteImageDescriptor(this.output, (ushort)frame.Image.Size.Width, (ushort)frame.Image.Size.Height, IsFirstFrame);
+            GifFileFormat.WriteImageDescriptor(this.output, (ushort)frame.Image.Size.Width, (ushort)frame.Image.Size.Height, ColorTable.Length, IsFirstFrame);
 
             if (!this.IsFirstFrame)
             {
@@ -90,40 +90,75 @@ namespace FMUtils.AnimatedGifEncoder
             this.IsFirstFrame = false;
         }
 
-        Tuple<byte[], byte[], bool[]> AnalyzePixels(Frame frame)
+        Tuple<byte[], byte[]> AnalyzePixels(Frame frame)
         {
-            byte[] PixelBytes = frame.GetPixelBytes();
 
-            int len = pixels.Length;
-            int nPix = len / 3;
-            var indexedPixels = new byte[nPix];
-            var indexedPixels = new byte[PixelBytes.Length / 3];
-            var usedEntry = new bool[256];
 
-            var quantizer = new NeuQuant(PixelBytes, PixelBytes.Length, (int)frame.Quality);
+            var quantizer = new NeuQuant(frame.PixelBytes, frame.PixelBytes.Length, (int)frame.Quality);
             var ColorTable = quantizer.process();
 
-            // convert map from BGR to RGB
-            for (int i = 0; i < ColorTable.Length; i += 3)
-            {
-                byte temp = ColorTable[i];
-                ColorTable[i] = ColorTable[i + 2];
-                ColorTable[i + 2] = temp;
-            }
 
             // map image pixels to new palette
-            int k = 0;
+            var indexedPixels = new byte[frame.PixelBytes.Length / 3];
+            var QuantizedIndexToColorTableIndex = new Dictionary<int, byte>();
+            var ColorTableBytes = new MemoryStream();
+
             for (int i = 0; i < indexedPixels.Length; i++)
             {
-                int index = quantizer.map(PixelBytes[k++] & 0xff, PixelBytes[k++] & 0xff, PixelBytes[k++] & 0xff);
-                usedEntry[index] = true;
-                indexedPixels[i] = (byte)index;
+                // "index" according to the quantizer's internal structure
+                int index = quantizer.map(frame.PixelBytes[i * 3], frame.PixelBytes[i * 3 + 1], frame.PixelBytes[i * 3 + 2]);
+
+                // if the mapping between quantizer index and compact color table index is unknown, find it
+                // (aka, this index's color is not yet recorded in the compact color table)
+                if (!QuantizedIndexToColorTableIndex.ContainsKey(index))
+                {
+                    // due to the quantizer's internal structure, this means looking at each of its entries
+                    for (int n = 0; n < ColorTable.Length; n++)
+                    {
+                        if (ColorTable[n][3] == index)
+                        {
+                            // when we've found the color this index is for,
+                            // record both the color table index and the mapping in case it comes up again
+                            indexedPixels[i] = (byte)(ColorTableBytes.Position / 3);
+                            QuantizedIndexToColorTableIndex.Add(index, (byte)(ColorTableBytes.Position / 3));
+
+                            // then write out the RGB data at this point
+                            ColorTableBytes.WriteByte((byte)ColorTable[n][2]); // R
+                            ColorTableBytes.WriteByte((byte)ColorTable[n][1]); // B
+                            ColorTableBytes.WriteByte((byte)ColorTable[n][0]); // G
+
+                            break;
+                        }
+                    }
+                }
+                else
+                {
+                    indexedPixels[i] = QuantizedIndexToColorTableIndex[index];
+                }
             }
 
-            return Tuple.Create<byte[], byte[], bool[]>(indexedPixels, ColorTable, usedEntry);
+            // GIF color tables are essentially powers of 2 length only
+            // pad out the compact color table to the next largest power of two (times 3) bytes
+            // see the notes where the Global Color Table is written for details.
+            var padding = 0;
+            for (int i = 7; i >= 0; i--)
+            {
+                var difference = (3 * System.Math.Pow(2, i + 1)) - ColorTableBytes.Length;
+                if (difference >= 0)
+                {
+                    padding = (int)difference;
+                }
+                else
+                {
+                    ColorTableBytes.Write(new byte[padding], 0, padding);
+                    break;
+                }
+            }
+
+            return Tuple.Create<byte[], byte[]>(indexedPixels, ColorTableBytes.ToArray());
         }
 
-        byte getClosestPaletteIndex(Color c, byte[] colorTable, bool[] usedEntry)
+        byte getClosestPaletteIndex(Color c, byte[] colorTable)
         {
             if (colorTable == null)
                 throw new ArgumentNullException("colorTable");
@@ -141,12 +176,11 @@ namespace FMUtils.AnimatedGifEncoder
                 int dg = g - (colorTable[i++] & 0xff);
                 int db = b - (colorTable[i] & 0xff);
                 int d = dr * dr + dg * dg + db * db;
-                byte index = (byte)(i / 3);
 
-                if (usedEntry[index] && (d < dmin))
+                if (d < dmin)
                 {
                     dmin = d;
-                    minpos = index;
+                    minpos = (byte)(i / 3);
                 }
 
                 i++;
