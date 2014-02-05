@@ -170,7 +170,7 @@ namespace FMUtils.AnimatedGifEncoder
             byte minpos = 0;
             int dmin = 256 * 256 * 256;
 
-            for (byte i = 0; i < colorTable.Length; )
+            for (int i = 0; i < colorTable.Length; )
             {
                 int dr = r - (colorTable[i++] & 0xff);
                 int dg = g - (colorTable[i++] & 0xff);
