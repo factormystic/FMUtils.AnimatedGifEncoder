@@ -6,14 +6,80 @@ namespace FMUtils.AnimatedGifEncoder
 {
     internal class GifFileFormat
     {
-        public static string GIF89A_HEADER = "GIF89a";
-        public static byte EXTENSION_BLOCK = 0x21;
+        /// <summary>
+        /// 17.c.i Signature
+        /// -
+        /// Identifies the GIF Data Stream. This field contains the fixed value 'GIF'.
+        /// </summary>
+        public static string HEADER_SIGNATURE = "GIF";
+
+        /// <summary>
+        /// 17.c.ii Version
+        /// -
+        /// Version number used to format the data stream.
+        /// Identifies the minimum set of capabilities necessary to a decoder to fully process the contents of the Data Stream.
+        /// </summary>
+        public static string HEADER_VERSION = "89a";
+
+        /// <summary>
+        /// 23.c.i Extension Introducer
+        /// -
+        /// Identifies the beginning of an extension block.
+        /// This field contains the fixed value 0x21.
+        /// </summary>
+        public static byte EXTENSION_INTRODUCER = 0x21;
+
+        /// <summary>
+        /// 27 Trailer
+        /// -
+        /// This block is a single-field block indicating the end of the GIF Data Stream.
+        /// It contains the fixed value 0x3B.
+        /// </summary>
         public static byte TRAILER = 0x3b;
+
+        /// <summary>
+        /// 23.c.ii Graphic Control Label
+        /// -
+        /// Identifies the current block as a Graphic Control Extension.
+        /// This field contains the fixed value 0xF9.
+        /// </summary>
         public static byte GRAPHIC_CONTROL_EXTENSION = 0xf9;
-        public static byte IMAGE_DESCRIPTOR = 0x2c;
-        public static byte NETSCAPE_APPLICATION_EXTENSION = 0x21;
+
+        /// <summary>
+        /// 23.c.iii Block Size
+        /// -
+        /// Number of bytes in the block, after the Block Size field and up to but not including the Block Terminator.
+        /// This field contains the fixed value 4.
+        /// </summary>
+        public static byte GRAPHIC_CONTROL_EXTENSION_BLOCK_SIZE = 4;
+
+        /// <summary>
+        /// 20.c.i Image Separator
+        /// -
+        /// Identifies the beginning of an Image Descriptor.
+        /// This field contains the fixed value 0x2C.
+        /// </summary>
+        public static byte IMAGE_SEPARATOR = 0x2c;
+
+        /// <summary>
+        /// 26.c.ii Application Extension Label
+        /// -
+        /// Identifies the block as an Application Extension.
+        /// This field contains the fixed value 0xFF.
+        /// </summary>
         public static byte APPLICATION_EXTENSION_LABEL = 0xff;
+
+        /// <summary>
+        /// 16.c.i Block Terminator (Size)
+        /// -
+        /// Number of bytes in the Data Sub-block; this field contains the fixed value 0x00.
+        /// </summary>
         public static byte BLOCK_TERMINATOR = 0x00;
+
+        /// <summary>
+        /// Defines a non-standard but commonly implemented extension, that indicates how many times the GIF should loop.
+        /// </summary>
+        public static byte NETSCAPE_APPLICATION_EXTENSION = 0x21;
 
         /// <summary>
         /// Writes Netscape application extension to define repeat count.
@@ -52,11 +118,9 @@ namespace FMUtils.AnimatedGifEncoder
         /// </summary>
         internal static void WriteGraphicControlExtension(Stream output, Frame frame, byte transIndex)
         {
-            output.WriteByte(GifFileFormat.EXTENSION_BLOCK);
+            output.WriteByte(GifFileFormat.EXTENSION_INTRODUCER);
             output.WriteByte(GifFileFormat.GRAPHIC_CONTROL_EXTENSION);
-
-            // data block size
-            output.WriteByte(4);
+            output.WriteByte(GifFileFormat.GRAPHIC_CONTROL_EXTENSION_BLOCK_SIZE);
 
             byte transp = 0x00;
             var disposal = DisposalMethod.Unspecified;
@@ -106,7 +170,7 @@ namespace FMUtils.AnimatedGifEncoder
         /// </summary>
         internal static void WriteImageDescriptor(Stream output, ushort width, ushort height, int colorTableLength, bool firstFrame)
         {
-            output.WriteByte(GifFileFormat.IMAGE_DESCRIPTOR);
+            output.WriteByte(GifFileFormat.IMAGE_SEPARATOR);
 
             // image position x,y = 0,0
             WriteShort(output, 0);
@@ -228,7 +292,8 @@ namespace FMUtils.AnimatedGifEncoder
 
         internal static void WriteFileHeader(Stream output)
         {
-            WriteString(output, GifFileFormat.GIF89A_HEADER);
+            WriteString(output, GifFileFormat.HEADER_SIGNATURE);
+            WriteString(output, GifFileFormat.HEADER_VERSION);
         }
 
         internal static void WriteFileTrailer(Stream output)
