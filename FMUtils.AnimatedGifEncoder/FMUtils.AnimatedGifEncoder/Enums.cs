@@ -26,5 +26,6 @@ namespace FMUtils.AnimatedGifEncoder
     {
         None,
         DiscardDuplicates,
+        AutoTransparency,
     };
 }

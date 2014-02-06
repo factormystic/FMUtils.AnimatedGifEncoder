@@ -47,6 +47,9 @@ namespace FMUtils.AnimatedGifEncoder
             if (frame == null)
                 throw new ArgumentNullException("frame");
 
+            if (this.optimization.HasFlag(FrameOptimization.AutoTransparency) && frame.Transparent != Color.Empty)
+                throw new ArgumentException("Frames may not have a manually specified transparent color when using AutoTransparency optimization", "frame");
+
             // first frame sets the image dimensions
             if (this.Size == Size.Empty)
                 this.Size = frame.Image.Size;
@@ -121,6 +124,18 @@ namespace FMUtils.AnimatedGifEncoder
                         this.Composite[i] = frame.PixelBytes[i];
                         this.Composite[i + 1] = frame.PixelBytes[i + 1];
                         this.Composite[i + 2] = frame.PixelBytes[i + 2];
+                    }
+                    else
+                    {
+                        if (this.optimization.HasFlag(FrameOptimization.AutoTransparency))
+                        {
+                            // todo: find a color not present in the current frame to use as transparency color
+                            frame.Transparent = Color.Magenta;
+
+                            frame.PixelBytes[i] = frame.Transparent.B;
+                            frame.PixelBytes[i + 1] = frame.Transparent.G;
+                            frame.PixelBytes[i + 2] = frame.Transparent.R;
+                        }
                     }
                 }
 
