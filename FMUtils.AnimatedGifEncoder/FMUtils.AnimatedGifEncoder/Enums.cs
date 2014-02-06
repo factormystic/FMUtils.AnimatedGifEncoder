@@ -20,4 +20,11 @@ namespace FMUtils.AnimatedGifEncoder
         RestoreBackgroundColor = 2,
         RestorePrevious = 3,
     };
+
+    [FlagsAttribute]
+    public enum FrameOptimization
+    {
+        None,
+        DiscardDuplicates,
+    };
 }

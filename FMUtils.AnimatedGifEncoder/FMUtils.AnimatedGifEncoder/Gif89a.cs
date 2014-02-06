@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 
@@ -19,12 +20,19 @@ namespace FMUtils.AnimatedGifEncoder
         /// </summary>
         public ushort Repeat = 0;
 
+        public FrameOptimization optimization { get; private set; }
+
         Stream output;
         bool IsFirstFrame = true;
 
-        public Gif89a(Stream writeableStream)
+        List<Frame> frames = new List<Frame>();
+        byte[] Composite;
+
+        public Gif89a(Stream writeableStream, FrameOptimization optimization = FrameOptimization.None)
         {
             this.output = writeableStream;
+            this.optimization = optimization;
+
             GifFileFormat.WriteFileHeader(this.output);
         }
 
@@ -44,11 +52,18 @@ namespace FMUtils.AnimatedGifEncoder
                 this.Size = frame.Image.Size;
 
             frame.PixelBytes = frame.GetPixelBytes();
+            frames.Add(frame);
+
+            if (this.IsFirstFrame)
+                this.Composite = frame.PixelBytes;
 
             // build color table & map pixels
             var analysis = this.AnalyzePixels(frame);
             var indexedPixels = analysis.Item1;
             var ColorTable = analysis.Item2;
+
+            if (indexedPixels.Length == 0)
+                return;
 
             // get closest match to transparent color if specified
             if (frame.Transparent != Color.Empty)
@@ -72,6 +87,7 @@ namespace FMUtils.AnimatedGifEncoder
             }
 
             // write graphic control extension
+            frame.OutputStreamGCEIndex = this.output.Position;
             GifFileFormat.WriteGraphicControlExtension(output, frame, frame.transIndex);
 
             // image descriptor
@@ -92,6 +108,44 @@ namespace FMUtils.AnimatedGifEncoder
 
         Tuple<byte[], byte[]> AnalyzePixels(Frame frame)
         {
+            if (!this.IsFirstFrame)
+            {
+                var FrameContributesChange = false;
+
+                for (int i = 0; i < this.Composite.Length; i += 3)
+                {
+                    if (this.Composite[i] != frame.PixelBytes[i] || this.Composite[i + 1] != frame.PixelBytes[i + 1] || this.Composite[i + 2] != frame.PixelBytes[i + 2])
+                    {
+                        FrameContributesChange = true;
+
+                        this.Composite[i] = frame.PixelBytes[i];
+                        this.Composite[i + 1] = frame.PixelBytes[i + 1];
+                        this.Composite[i + 2] = frame.PixelBytes[i + 2];
+                    }
+                }
+
+                if (this.optimization.HasFlag(FrameOptimization.DiscardDuplicates) && !FrameContributesChange)
+                {
+                    // hang on to where we currently are in the output stream
+                    var here = this.output.Position;
+
+                    // the last written GCE might be more than one frame back, if there's a bunch of duplicates
+                    var prev = frame;
+                    while (prev.OutputStreamGCEIndex == 0)
+                        prev = frames[frames.IndexOf(prev) - 1];
+
+                    // jump back to the GCE in the previous frame
+                    this.output.Position = prev.OutputStreamGCEIndex;
+
+                    prev.Delay += frame.Delay;
+                    GifFileFormat.WriteGraphicControlExtension(output, prev, prev.transIndex);
+
+                    // jump forward to where we just were to continue on normally
+                    this.output.Position = here;
+
+                    return Tuple.Create<byte[], byte[]>(new byte[0], new byte[0]);
+                }
+            }
 
 
             var quantizer = new NeuQuant(frame.PixelBytes, frame.PixelBytes.Length, (int)frame.Quality);

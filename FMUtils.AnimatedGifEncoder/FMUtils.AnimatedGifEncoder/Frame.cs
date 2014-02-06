@@ -44,6 +44,8 @@ namespace FMUtils.AnimatedGifEncoder
         internal byte[] PixelBytes { get; set; }
 
 
+        internal long OutputStreamGCEIndex { get; set; }
+
         public Frame(string filename, ushort delay = 67, ColorQuantizationQuality quality = ColorQuantizationQuality.Reasonable)
         {
             this.Image = new Bitmap(filename);
