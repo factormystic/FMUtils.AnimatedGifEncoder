@@ -45,6 +45,9 @@ namespace FMUtils.AnimatedGifEncoder
 
 
         internal long OutputStreamGCEIndex { get; set; }
+        
+        internal byte transIndex = 0;
+
 
         public Frame(string filename, ushort delay = 67, ColorQuantizationQuality quality = ColorQuantizationQuality.Reasonable)
         {
@@ -98,7 +101,5 @@ namespace FMUtils.AnimatedGifEncoder
             this.Image.UnlockBits(ImgData);
             return PixelBytes;
         }
-
-        public byte transIndex = 0;
     }
 }
