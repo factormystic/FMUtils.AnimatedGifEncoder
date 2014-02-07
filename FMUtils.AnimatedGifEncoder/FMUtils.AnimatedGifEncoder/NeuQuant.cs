@@ -123,7 +123,7 @@ namespace FMUtils.AnimatedGifEncoder
         // typedef int pixel[4]; /* BGRc */
         protected int[][] network; /* the network itself - [netsize][4] */
 
-        protected int[] netindex = new int[256];
+        protected int[] netindex = new int[netsize];
 
         /* for network lookup - really 256 */
 
@@ -140,14 +140,15 @@ namespace FMUtils.AnimatedGifEncoder
          * Initialise network in range (0,0,0) to (255,255,255) and set parameters
          * -----------------------------------------------------------------------
          */
-        public NeuQuant(byte[] thepic, int len, int sample)
+        public NeuQuant(byte[] thepic, int max_colors, int sample)
         {
 
             int i;
             int[] p;
 
             thepicture = thepic;
-            lengthcount = len;
+            lengthcount = thepic.Length;
+            netsize = max_colors;
             samplefac = sample;
 
             network = new int[netsize][];
@@ -221,12 +222,14 @@ namespace FMUtils.AnimatedGifEncoder
                     for (j = previouscol + 1; j < smallval; j++)
                         netindex[j] = i;
                     previouscol = smallval;
+                    if (previouscol >= netsize)
+                        previouscol = netsize - 1;
                     startpos = i;
                 }
             }
             netindex[previouscol] = (startpos + maxnetpos) >> 1;
-            for (j = previouscol + 1; j < 256; j++)
-                netindex[j] = maxnetpos; /* really 256 */
+            for (j = previouscol + 1; j < netsize; j++)
+                netindex[j] = maxnetpos; /* really netsize */
         }
 
         /*
@@ -322,9 +325,9 @@ namespace FMUtils.AnimatedGifEncoder
             int[] p;
             int best;
 
-            bestd = 1000; /* biggest possible dist is 256*3 */
+            bestd = 1000; /* biggest possible dist is netsize*3 */
             best = -1;
-            i = netindex[g]; /* index on g */
+            i = netindex[Math.Min(g, netsize - 1)]; /* index on g */
             j = i - 1; /* start at netindex[g] and work outwards */
 
             while ((i < netsize) || (j >= 0))

@@ -175,7 +175,8 @@ namespace FMUtils.AnimatedGifEncoder
 
 
             // totally exclude the transparency color from the quantization process, if there is one
-            var quantizer = new NeuQuant(OpaqueFramePixelBytes.ToArray(), (int)OpaqueFramePixelBytes.Length, (int)frame.Quality);
+            // reduce the quantizer max color space by 1 if we need to reserve a color table slot for the transparent color
+            var quantizer = new NeuQuant(OpaqueFramePixelBytes.ToArray(), 256 - (frame.Transparent.IsEmpty ? 0 : 1), (int)frame.Quality);
             var ColorTable = quantizer.process();
 
 
