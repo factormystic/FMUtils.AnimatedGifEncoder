@@ -214,15 +214,12 @@ namespace FMUtils.AnimatedGifEncoder
             {
                 var difference = (3 * System.Math.Pow(2, i + 1)) - ColorTableBytes.Length;
                 if (difference >= 0)
-                {
                     padding = (int)difference;
-                }
-                else
-                {
-                    ColorTableBytes.Write(new byte[padding], 0, padding);
-                    break;
-                }
             }
+
+            if (padding > 0)
+                ColorTableBytes.Write(new byte[padding], 0, padding);
+
 
             return Tuple.Create<byte[], byte[]>(indexedPixels, ColorTableBytes.ToArray());
         }
