@@ -26,7 +26,7 @@ namespace FMUtils.AnimatedGifEncoder
         bool IsFirstFrame = true;
 
         List<Frame> frames = new List<Frame>();
-        byte[] Composite;
+        byte[] CompositePixelBytes;
 
         public Gif89a(Stream writeableStream, FrameOptimization optimization = FrameOptimization.None)
         {
@@ -58,7 +58,7 @@ namespace FMUtils.AnimatedGifEncoder
             frames.Add(frame);
 
             if (this.IsFirstFrame)
-                this.Composite = frame.PixelBytes;
+                this.CompositePixelBytes = frame.PixelBytes;
 
             // build color table & map pixels
             var analysis = this.AnalyzePixels(frame);
@@ -107,46 +107,42 @@ namespace FMUtils.AnimatedGifEncoder
         {
             MemoryStream OpaqueFramePixelBytes;
 
-            if (!this.IsFirstFrame)
+            if (this.IsFirstFrame)
+            {
+                OpaqueFramePixelBytes = new MemoryStream(frame.PixelBytes);
+            }
+            else
             {
                 OpaqueFramePixelBytes = new MemoryStream();
                 var FrameContributesChange = false;
 
-                for (int i = 0; i < this.Composite.Length; i += 3)
+                for (int i = 0; i < frame.PixelBytes.Length; i += 3)
                 {
-                    if (this.Composite[i] != frame.PixelBytes[i] || this.Composite[i + 1] != frame.PixelBytes[i + 1] || this.Composite[i + 2] != frame.PixelBytes[i + 2])
+                    var PixelContributesChange = frame.PixelBytes[i] != this.CompositePixelBytes[i] || frame.PixelBytes[i + 1] != this.CompositePixelBytes[i + 1] || frame.PixelBytes[i + 2] != this.CompositePixelBytes[i + 2];
+                    FrameContributesChange = FrameContributesChange || PixelContributesChange;
+
+                    if (PixelContributesChange)
                     {
-                        FrameContributesChange = true;
+                        OpaqueFramePixelBytes.Write(frame.PixelBytes, i, 3);
 
-                        this.Composite[i] = frame.PixelBytes[i];
-                        this.Composite[i + 1] = frame.PixelBytes[i + 1];
-                        this.Composite[i + 2] = frame.PixelBytes[i + 2];
-
-                        OpaqueFramePixelBytes.WriteByte(frame.PixelBytes[i]);
-                        OpaqueFramePixelBytes.WriteByte(frame.PixelBytes[i + 1]);
-                        OpaqueFramePixelBytes.WriteByte(frame.PixelBytes[i + 2]);
+                        // retain a composite image, since we might be overwriting pixel bytes with transparency colors and won't be able to use those pixel bytes for future frame comparison
+                        this.CompositePixelBytes[i] = frame.PixelBytes[i];
+                        this.CompositePixelBytes[i + 1] = frame.PixelBytes[i + 1];
+                        this.CompositePixelBytes[i + 2] = frame.PixelBytes[i + 2];
                     }
-                    else
-                    {
-                        if (this.optimization.HasFlag(FrameOptimization.AutoTransparency))
-                        {
-                            // todo: find a color not present in the current frame to use as transparency color
-                            frame.Transparent = Color.Magenta;
 
-                            frame.PixelBytes[i] = frame.Transparent.B;
-                            frame.PixelBytes[i + 1] = frame.Transparent.G;
-                            frame.PixelBytes[i + 2] = frame.Transparent.R;
-                        }
-                        else
-                        {
-                            OpaqueFramePixelBytes.WriteByte(frame.PixelBytes[i]);
-                            OpaqueFramePixelBytes.WriteByte(frame.PixelBytes[i + 1]);
-                            OpaqueFramePixelBytes.WriteByte(frame.PixelBytes[i + 2]);
-                        }
+                    if (!PixelContributesChange && this.optimization.HasFlag(FrameOptimization.AutoTransparency))
+                    {
+                        // todo: find a color not present in the current frame to use as transparency color
+                        frame.Transparent = Color.Magenta;
+
+                        frame.PixelBytes[i] = frame.Transparent.B;
+                        frame.PixelBytes[i + 1] = frame.Transparent.G;
+                        frame.PixelBytes[i + 2] = frame.Transparent.R;
                     }
                 }
 
-                if (this.optimization.HasFlag(FrameOptimization.DiscardDuplicates) && !FrameContributesChange)
+                if (!FrameContributesChange && this.optimization.HasFlag(FrameOptimization.DiscardDuplicates))
                 {
                     // hang on to where we currently are in the output stream
                     var here = this.output.Position;
@@ -167,10 +163,6 @@ namespace FMUtils.AnimatedGifEncoder
 
                     return Tuple.Create<byte[], byte[]>(new byte[0], new byte[0]);
                 }
-            }
-            else
-            {
-                OpaqueFramePixelBytes = new MemoryStream(frame.PixelBytes);
             }
 
 
