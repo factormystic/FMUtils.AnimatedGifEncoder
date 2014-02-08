@@ -176,16 +176,18 @@ namespace FMUtils.AnimatedGifEncoder
             var indexedPixels = new byte[frame.PixelBytes.Length / 3];
             var QuantizedIndexToColorTableIndex = new Dictionary<int, byte>();
             var ColorTableBytes = new MemoryStream();
-            var TransparentIndexWritten = false;
+            var TransparentColorWritten = false;
+
 
             for (int i = 0; i < indexedPixels.Length; i++)
             {
-                // found a transparent pixel, 
-                if (!frame.Transparent.IsEmpty && frame.PixelBytes[i * 3] == frame.Transparent.B && frame.PixelBytes[i * 3 + 1] == frame.Transparent.G && frame.PixelBytes[i * 3 + 2] == frame.Transparent.R)
+                // if the frame has a transparency color, and this pixel is the transparency color, ignore the quantizer's result and write the color table & indexed pixel ourselves
+                var PixelIsTransparent = !frame.Transparent.IsEmpty && frame.PixelBytes[i * 3] == frame.Transparent.B && frame.PixelBytes[i * 3 + 1] == frame.Transparent.G && frame.PixelBytes[i * 3 + 2] == frame.Transparent.R;
+                if (PixelIsTransparent)
                 {
-                    if (!TransparentIndexWritten)
+                    if (!TransparentColorWritten)
                     {
-                        TransparentIndexWritten = true;
+                        TransparentColorWritten = true;
 
                         frame.transIndex = (byte)ColorTableBytes.Position;
 
@@ -195,38 +197,36 @@ namespace FMUtils.AnimatedGifEncoder
                     }
 
                     indexedPixels[i] = frame.transIndex;
+                    continue;
                 }
-                else
+
+                // "index" according to the quantizer's internal structure
+                int index = quantizer.map(frame.PixelBytes[i * 3], frame.PixelBytes[i * 3 + 1], frame.PixelBytes[i * 3 + 2]);
+
+                if (QuantizedIndexToColorTableIndex.ContainsKey(index))
                 {
-                    // "index" according to the quantizer's internal structure
-                    int index = quantizer.map(frame.PixelBytes[i * 3], frame.PixelBytes[i * 3 + 1], frame.PixelBytes[i * 3 + 2]);
+                    indexedPixels[i] = QuantizedIndexToColorTableIndex[index];
+                    continue;
+                }
 
-                    // if the mapping between quantizer index and compact color table index is unknown, find it
-                    // (aka, this index's color is not yet recorded in the compact color table)
-                    if (!QuantizedIndexToColorTableIndex.ContainsKey(index))
+                // if the mapping between quantizer index and compact color table index is unknown, find it
+                // (aka, this index's color is not yet recorded in the compact color table)
+                // due to the quantizer's internal structure, this means looking at each of its entries
+                for (int n = 0; n < ColorTable.Length; n++)
+                {
+                    if (ColorTable[n][3] == index)
                     {
-                        // due to the quantizer's internal structure, this means looking at each of its entries
-                        for (int n = 0; n < ColorTable.Length; n++)
-                        {
-                            if (ColorTable[n][3] == index)
-                            {
-                                // when we've found the color this index is for,
-                                // record both the color table index and the mapping in case it comes up again
-                                indexedPixels[i] = (byte)(ColorTableBytes.Position / 3);
-                                QuantizedIndexToColorTableIndex.Add(index, (byte)(ColorTableBytes.Position / 3));
+                        // when we've found the color this index is for,
+                        // record both the color table index and the mapping in case it comes up again
+                        indexedPixels[i] = (byte)(ColorTableBytes.Position / 3);
+                        QuantizedIndexToColorTableIndex.Add(index, (byte)(ColorTableBytes.Position / 3));
 
-                                // then write out the RGB data at this point
-                                ColorTableBytes.WriteByte((byte)ColorTable[n][2]); // R
-                                ColorTableBytes.WriteByte((byte)ColorTable[n][1]); // B
-                                ColorTableBytes.WriteByte((byte)ColorTable[n][0]); // G
+                        // then write out the RGB data at this point
+                        ColorTableBytes.WriteByte((byte)ColorTable[n][2]); // R
+                        ColorTableBytes.WriteByte((byte)ColorTable[n][1]); // B
+                        ColorTableBytes.WriteByte((byte)ColorTable[n][0]); // G
 
-                                break;
-                            }
-                        }
-                    }
-                    else
-                    {
-                        indexedPixels[i] = QuantizedIndexToColorTableIndex[index];
+                        break;
                     }
                 }
             }
