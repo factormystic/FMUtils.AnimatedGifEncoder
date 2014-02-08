@@ -225,15 +225,15 @@ namespace FMUtils.AnimatedGifEncoder
 
             // the color table size calculation is going backwards from the size calculation defined in the spec:
             // 3 x 2^(Size of Global Color Table + 1) => Log2(colorTableLength / 3) - 1
-            
+
             // it's especially irritating because this means the length of the color table byte
-            // array may ONLY EVER BE: 6, 12, 24, 48, 96, 192, 384, or 768 bytes long!
+            // array may ONLY EVER BE: 6 (1 color), 12 (4 colors), 24 (8 colors), 48 (16 colors), 96 (32 colors), 192 (64 colors), 384 (128 colors), or 768 (256 colors) bytes long!
             // This makes optimizing modern gifs for less than 256 colors kind of pointless,
             // since you'd have to half the number of colors down to 128 to actually write out a smaller color table
-            
+
             // even though this code supports color tables of any valid width, it probably doesn't need to
             // the alternate implementation would be to simply always claim the max color table length,
-            // and then zero-pad the color table byte array to 3*256 bytes long
+            // and then zero-pad the color table byte array to 768 bytes long
 
             byte gct = 0x1 << 7;
             byte res = 0x7 << 4;
