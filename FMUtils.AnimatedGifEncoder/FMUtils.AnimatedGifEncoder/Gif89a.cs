@@ -121,7 +121,7 @@ namespace FMUtils.AnimatedGifEncoder
                     var PixelContributesChange = frame.PixelBytes[i] != this.CompositePixelBytes[i] || frame.PixelBytes[i + 1] != this.CompositePixelBytes[i + 1] || frame.PixelBytes[i + 2] != this.CompositePixelBytes[i + 2];
                     FrameContributesChange = FrameContributesChange || PixelContributesChange;
 
-                    if (PixelContributesChange)
+                    if (PixelContributesChange || !this.optimization.HasFlag(FrameOptimization.AutoTransparency))
                     {
                         OpaqueFramePixelBytes.Write(frame.PixelBytes, i, 3);
 
@@ -189,7 +189,7 @@ namespace FMUtils.AnimatedGifEncoder
                     {
                         TransparentColorWritten = true;
 
-                        frame.transIndex = (byte)ColorTableBytes.Position;
+                        frame.transIndex = (byte)(ColorTableBytes.Position / 3);
 
                         ColorTableBytes.WriteByte(frame.Transparent.R);
                         ColorTableBytes.WriteByte(frame.Transparent.G);
@@ -245,6 +245,15 @@ namespace FMUtils.AnimatedGifEncoder
 
             if (padding > 0)
                 ColorTableBytes.Write(new byte[padding], 0, padding);
+
+
+            // if we ended up not needing the transparency color (ex: used frame clipping, and all the pixels inside were changed colors)
+            // then make sure to reset the frame transparency so we don't try to use it later
+            if (!TransparentColorWritten)
+            {
+                frame.Transparent = Color.Empty;
+                frame.transIndex = 0;
+            }
 
 
             return Tuple.Create<byte[], byte[]>(indexedPixels, ColorTableBytes.ToArray());
