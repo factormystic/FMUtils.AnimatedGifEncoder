@@ -48,6 +48,8 @@ namespace FMUtils.AnimatedGifEncoder
         
         internal byte transIndex = 0;
 
+        internal Rectangle ChangeRect { get; set; }
+
 
         public Frame(string filename, ushort delay = 67, ColorQuantizationQuality quality = ColorQuantizationQuality.Reasonable)
         {

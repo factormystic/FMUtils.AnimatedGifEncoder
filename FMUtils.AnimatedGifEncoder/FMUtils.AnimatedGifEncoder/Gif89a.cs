@@ -88,7 +88,7 @@ namespace FMUtils.AnimatedGifEncoder
             GifFileFormat.WriteGraphicControlExtension(output, frame, frame.transIndex);
 
             // image descriptor
-            GifFileFormat.WriteImageDescriptor(this.output, (ushort)frame.Image.Size.Width, (ushort)frame.Image.Size.Height, ColorTable.Length, IsFirstFrame);
+            GifFileFormat.WriteImageDescriptor(this.output, frame.ChangeRect, ColorTable.Length, IsFirstFrame);
 
             if (!this.IsFirstFrame)
             {
@@ -97,7 +97,7 @@ namespace FMUtils.AnimatedGifEncoder
             }
 
             // encode and write pixel data
-            var lzw = new LZWEncoder(this.Size.Width, this.Size.Height, indexedPixels, 8);
+            var lzw = new LZWEncoder(frame.ChangeRect.Width, frame.ChangeRect.Height, indexedPixels, 8);
             lzw.encode(this.output);
 
             this.IsFirstFrame = false;
@@ -106,6 +106,11 @@ namespace FMUtils.AnimatedGifEncoder
         Tuple<byte[], byte[]> AnalyzePixels(Frame frame)
         {
             MemoryStream OpaqueFramePixelBytes;
+
+            var LeftmostChange = frame.Image.Width;
+            var RightmostChange = 0;
+            var TopmostChange = frame.Image.Height;
+            var BottommostChange = 0;
 
             if (this.IsFirstFrame)
             {
@@ -129,6 +134,20 @@ namespace FMUtils.AnimatedGifEncoder
                         this.CompositePixelBytes[i] = frame.PixelBytes[i];
                         this.CompositePixelBytes[i + 1] = frame.PixelBytes[i + 1];
                         this.CompositePixelBytes[i + 2] = frame.PixelBytes[i + 2];
+
+                        // keep track of the growing rect where pixels differ between frames
+                        // we can then clip the frame size to only this changed area
+                        if (this.optimization.HasFlag(FrameOptimization.ClipFrame))
+                        {
+                            var x = (i / 3) % frame.Image.Width;
+                            var y = (i / 3) / frame.Image.Width;
+
+                            LeftmostChange = Math.Min(LeftmostChange, x);
+                            RightmostChange = Math.Max(RightmostChange, x);
+
+                            TopmostChange = Math.Min(TopmostChange, y);
+                            BottommostChange = Math.Max(BottommostChange, y);
+                        }
                     }
 
                     if (!PixelContributesChange && this.optimization.HasFlag(FrameOptimization.AutoTransparency))
@@ -166,6 +185,18 @@ namespace FMUtils.AnimatedGifEncoder
             }
 
 
+            // construct the shrunk frame rect out of the known bounds where the frame was different
+            // difference should be inclusive (eg, left = 14px and right = 14px then 1px width) hence adding 1
+            if (this.IsFirstFrame || !this.optimization.HasFlag(FrameOptimization.ClipFrame))
+            {
+                frame.ChangeRect = new Rectangle(0, 0, frame.Image.Width, frame.Image.Height);
+            }
+            else
+            {
+                frame.ChangeRect = new Rectangle(LeftmostChange, TopmostChange, RightmostChange - LeftmostChange + 1, BottommostChange - TopmostChange + 1);
+            }
+
+
             // totally exclude the transparency color from the quantization process, if there is one
             // reduce the quantizer max color space by 1 if we need to reserve a color table slot for the transparent color
             var quantizer = new NeuQuant(OpaqueFramePixelBytes.ToArray(), 256 - (frame.Transparent.IsEmpty ? 0 : 1), (int)frame.Quality);
@@ -173,14 +204,23 @@ namespace FMUtils.AnimatedGifEncoder
 
 
             // map image pixels to new palette
-            var indexedPixels = new byte[frame.PixelBytes.Length / 3];
+            var indexedPixels = new MemoryStream();
             var QuantizedIndexToColorTableIndex = new Dictionary<int, byte>();
             var ColorTableBytes = new MemoryStream();
             var TransparentColorWritten = false;
 
 
-            for (int i = 0; i < indexedPixels.Length; i++)
+            for (int i = 0; i < frame.PixelBytes.Length / 3; i++)
             {
+                if (this.optimization.HasFlag(FrameOptimization.ClipFrame))
+                {
+                    var x = i % frame.Image.Width;
+                    var y = i / frame.Image.Width;
+
+                    if (!frame.ChangeRect.Contains(x, y))
+                        continue;
+                }
+
                 // if the frame has a transparency color, and this pixel is the transparency color, ignore the quantizer's result and write the color table & indexed pixel ourselves
                 var PixelIsTransparent = !frame.Transparent.IsEmpty && frame.PixelBytes[i * 3] == frame.Transparent.B && frame.PixelBytes[i * 3 + 1] == frame.Transparent.G && frame.PixelBytes[i * 3 + 2] == frame.Transparent.R;
                 if (PixelIsTransparent)
@@ -196,7 +236,7 @@ namespace FMUtils.AnimatedGifEncoder
                         ColorTableBytes.WriteByte(frame.Transparent.B);
                     }
 
-                    indexedPixels[i] = frame.transIndex;
+                    indexedPixels.WriteByte(frame.transIndex);
                     continue;
                 }
 
@@ -205,7 +245,7 @@ namespace FMUtils.AnimatedGifEncoder
 
                 if (QuantizedIndexToColorTableIndex.ContainsKey(index))
                 {
-                    indexedPixels[i] = QuantizedIndexToColorTableIndex[index];
+                    indexedPixels.WriteByte(QuantizedIndexToColorTableIndex[index]);
                     continue;
                 }
 
@@ -218,7 +258,7 @@ namespace FMUtils.AnimatedGifEncoder
                     {
                         // when we've found the color this index is for,
                         // record both the color table index and the mapping in case it comes up again
-                        indexedPixels[i] = (byte)(ColorTableBytes.Position / 3);
+                        indexedPixels.WriteByte((byte)(ColorTableBytes.Position / 3));
                         QuantizedIndexToColorTableIndex.Add(index, (byte)(ColorTableBytes.Position / 3));
 
                         // then write out the RGB data at this point
@@ -256,7 +296,7 @@ namespace FMUtils.AnimatedGifEncoder
             }
 
 
-            return Tuple.Create<byte[], byte[]>(indexedPixels, ColorTableBytes.ToArray());
+            return Tuple.Create<byte[], byte[]>(indexedPixels.ToArray(), ColorTableBytes.ToArray());
         }
     }
 }

@@ -168,17 +168,17 @@ namespace FMUtils.AnimatedGifEncoder
         /// image must fit within the boundaries of the Logical Screen, as defined
         /// in the Logical Screen Descriptor.
         /// </summary>
-        internal static void WriteImageDescriptor(Stream output, ushort width, ushort height, int colorTableLength, bool firstFrame)
+        internal static void WriteImageDescriptor(Stream output, Rectangle changeRect, int colorTableLength, bool firstFrame)
         {
             output.WriteByte(GifFileFormat.IMAGE_SEPARATOR);
 
             // image position x,y = 0,0
-            WriteShort(output, 0);
-            WriteShort(output, 0);
+            WriteShort(output, (ushort)changeRect.Left);
+            WriteShort(output, (ushort)changeRect.Top);
 
             // image size
-            WriteShort(output, width);
-            WriteShort(output, height);
+            WriteShort(output, (ushort)changeRect.Width);
+            WriteShort(output, (ushort)changeRect.Height);
 
             // packed fields
             if (firstFrame)
