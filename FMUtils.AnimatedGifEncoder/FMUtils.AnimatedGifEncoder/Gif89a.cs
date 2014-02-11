@@ -106,6 +106,7 @@ namespace FMUtils.AnimatedGifEncoder
         Tuple<byte[], byte[]> AnalyzePixels(Frame frame)
         {
             MemoryStream OpaqueFramePixelBytes;
+            var TransparentPixelIndexes = new bool[frame.PixelBytes.Length / 3];
 
             var LeftmostChange = frame.Image.Width;
             var RightmostChange = 0;
@@ -150,15 +151,7 @@ namespace FMUtils.AnimatedGifEncoder
                         }
                     }
 
-                    if (!PixelContributesChange && this.optimization.HasFlag(FrameOptimization.AutoTransparency))
-                    {
-                        // todo: find a color not present in the current frame to use as transparency color
-                        frame.Transparent = Color.Magenta;
-
-                        frame.PixelBytes[i] = frame.Transparent.B;
-                        frame.PixelBytes[i + 1] = frame.Transparent.G;
-                        frame.PixelBytes[i + 2] = frame.Transparent.R;
-                    }
+                    TransparentPixelIndexes[i / 3] = !PixelContributesChange && this.optimization.HasFlag(FrameOptimization.AutoTransparency);
                 }
 
                 if (!FrameContributesChange && this.optimization.HasFlag(FrameOptimization.DiscardDuplicates))
@@ -221,14 +214,15 @@ namespace FMUtils.AnimatedGifEncoder
                         continue;
                 }
 
-                // if the frame has a transparency color, and this pixel is the transparency color, ignore the quantizer's result and write the color table & indexed pixel ourselves
-                var PixelIsTransparent = !frame.Transparent.IsEmpty && frame.PixelBytes[i * 3] == frame.Transparent.B && frame.PixelBytes[i * 3 + 1] == frame.Transparent.G && frame.PixelBytes[i * 3 + 2] == frame.Transparent.R;
-                if (PixelIsTransparent)
+                // if this pixel is known as transparent, ignore the quantizer's result and write the color table & indexed pixel ourselves
+                if (TransparentPixelIndexes[i])
                 {
                     if (!TransparentColorWritten)
                     {
                         TransparentColorWritten = true;
 
+                        // todo: find a color not present in the current frame to use as transparency color
+                        frame.Transparent = Color.Magenta;
                         frame.transIndex = (byte)(ColorTableBytes.Position / 3);
 
                         ColorTableBytes.WriteByte(frame.Transparent.R);
