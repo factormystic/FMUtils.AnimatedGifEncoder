@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
+using System.Linq;
 
 namespace FMUtils.AnimatedGifEncoder
 {
@@ -23,7 +24,6 @@ namespace FMUtils.AnimatedGifEncoder
         public FrameOptimization optimization { get; private set; }
 
         Stream output;
-        bool IsFirstFrame = true;
 
         List<Frame> frames = new List<Frame>();
         byte[] CompositePixelBytes;
@@ -60,7 +60,7 @@ namespace FMUtils.AnimatedGifEncoder
             frame.PixelBytes = frame.GetPixelBytes();
             frames.Add(frame);
 
-            if (this.IsFirstFrame)
+            if (frame == this.frames.First())
                 this.CompositePixelBytes = frame.PixelBytes;
 
             // build color table & map pixels
@@ -92,7 +92,7 @@ namespace FMUtils.AnimatedGifEncoder
             if (indexedPixels.Length == 0)
                 return;
 
-            if (this.IsFirstFrame)
+            if (frame == this.frames.First())
             {
                 // logical screen descriptior
                 GifFileFormat.WriteLogicalScreenDescriptor(this.output, (ushort)this.Size.Width, (ushort)this.Size.Height, ColorTable.Length);
@@ -112,9 +112,9 @@ namespace FMUtils.AnimatedGifEncoder
             GifFileFormat.WriteGraphicControlExtension(output, frame, frame.transIndex);
 
             // image descriptor
-            GifFileFormat.WriteImageDescriptor(this.output, frame.ChangeRect, ColorTable.Length, IsFirstFrame);
+            GifFileFormat.WriteImageDescriptor(this.output, frame.ChangeRect, ColorTable.Length, frame == this.frames.First());
 
-            if (!this.IsFirstFrame)
+            if (frame != this.frames.First())
             {
                 // local color table
                 GifFileFormat.WriteColorTable(output, ColorTable);
@@ -123,8 +123,6 @@ namespace FMUtils.AnimatedGifEncoder
             // encode and write pixel data
             var lzw = new LZWEncoder(frame.ChangeRect.Width, frame.ChangeRect.Height, indexedPixels, 8);
             lzw.encode(this.output);
-
-            this.IsFirstFrame = false;
         }
 
         Tuple<byte[], byte[]> AnalyzePixels(Frame frame)
@@ -137,7 +135,7 @@ namespace FMUtils.AnimatedGifEncoder
             var TopmostChange = frame.Image.Height;
             var BottommostChange = 0;
 
-            if (this.IsFirstFrame)
+            if (frame == this.frames.First())
             {
                 OpaqueFramePixelBytes = new MemoryStream(frame.PixelBytes);
             }
@@ -187,7 +185,7 @@ namespace FMUtils.AnimatedGifEncoder
 
             // construct the shrunk frame rect out of the known bounds where the frame was different
             // difference should be inclusive (eg, left = 14px and right = 14px then 1px width) hence adding 1
-            if (this.IsFirstFrame || !this.optimization.HasFlag(FrameOptimization.ClipFrame))
+            if (frame == this.frames.First() || !this.optimization.HasFlag(FrameOptimization.ClipFrame))
             {
                 frame.ChangeRect = new Rectangle(0, 0, frame.Image.Width, frame.Image.Height);
             }
