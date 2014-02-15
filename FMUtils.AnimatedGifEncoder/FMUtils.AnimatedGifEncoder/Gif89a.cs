@@ -57,16 +57,9 @@ namespace FMUtils.AnimatedGifEncoder
             if (this.Size == Size.Empty)
                 this.Size = frame.Image.Size;
 
-            frame.PixelBytes = frame.GetPixelBytes();
             frames.Add(frame);
 
-            if (frame == this.frames.First())
-            {
-                this.CompositePixelBytes = new byte[frame.PixelBytes.Length];
-                frame.PixelBytes.CopyTo(this.CompositePixelBytes, 0);
-            }
-
-            // build color table & map pixels
+            // find transparent/opaque pixels and update the composite image
             this.AnalyzeFrame(frame);
 
             // if we're discarding duplicate frames
@@ -92,6 +85,7 @@ namespace FMUtils.AnimatedGifEncoder
                 return;
             }
 
+            // build color table & map pixels
             this.AnalyzePixels(frame);
 
             if (frame.IndexedPixels.Length == 0)
@@ -132,24 +126,27 @@ namespace FMUtils.AnimatedGifEncoder
 
         void AnalyzeFrame(Frame frame)
         {
+            frame.PixelBytes = frame.GetPixelBytes();
             frame.ChangeRect = new Rectangle(0, 0, frame.Image.Width, frame.Image.Height);
             frame.TransparentPixelIndexes = new bool[frame.PixelBytes.Length / 3];
 
             if (frame == this.frames.First())
             {
+                this.CompositePixelBytes = new byte[frame.PixelBytes.Length];
+                frame.PixelBytes.CopyTo(this.CompositePixelBytes, 0);
+
                 frame.OpaqueFramePixelBytes = new byte[frame.PixelBytes.Length];
                 frame.PixelBytes.CopyTo(frame.OpaqueFramePixelBytes, 0);
                 return;
             }
 
             var OpaqueFramePixelBytes = new MemoryStream();
+            var FrameContributesChange = false;
 
             var LeftmostChange = frame.Image.Width;
             var RightmostChange = 0;
             var TopmostChange = frame.Image.Height;
             var BottommostChange = 0;
-
-            var FrameContributesChange = false;
 
             for (int i = 0; i < frame.PixelBytes.Length; i += 3)
             {
