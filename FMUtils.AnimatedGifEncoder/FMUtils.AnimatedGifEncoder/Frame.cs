@@ -42,6 +42,8 @@ namespace FMUtils.AnimatedGifEncoder
         public ColorQuantizationQuality Quality = ColorQuantizationQuality.Reasonable;
 
         internal byte[] PixelBytes { get; set; }
+        internal byte[] OpaqueFramePixelBytes { get; set; }
+        internal bool[] TransparentPixelIndexes { get; set; }
 
 
         internal long OutputStreamGCEIndex { get; set; }

@@ -67,12 +67,13 @@ namespace FMUtils.AnimatedGifEncoder
             }
 
             // build color table & map pixels
+            this.AnalyzeFrame(frame);
             var analysis = this.AnalyzePixels(frame);
             var indexedPixels = analysis.Item1;
             var ColorTable = analysis.Item2;
 
             // if we're discarding duplicate frames
-            if (indexedPixels.Length == 0 && ColorTable.Length == 0 && this.optimization.HasFlag(FrameOptimization.DiscardDuplicates))
+            if (frame.OpaqueFramePixelBytes.Length == 0 && this.optimization.HasFlag(FrameOptimization.DiscardDuplicates))
             {
                 // hang on to where we currently are in the output stream
                 var here = this.output.Position;
@@ -128,79 +129,74 @@ namespace FMUtils.AnimatedGifEncoder
             lzw.encode(this.output);
         }
 
-        Tuple<byte[], byte[]> AnalyzePixels(Frame frame)
+        void AnalyzeFrame(Frame frame)
         {
-            MemoryStream OpaqueFramePixelBytes;
-            var TransparentPixelIndexes = new bool[frame.PixelBytes.Length / 3];
+            frame.ChangeRect = new Rectangle(0, 0, frame.Image.Width, frame.Image.Height);
+            frame.TransparentPixelIndexes = new bool[frame.PixelBytes.Length / 3];
+
+            if (frame == this.frames.First())
+            {
+                frame.OpaqueFramePixelBytes = new byte[frame.PixelBytes.Length];
+                frame.PixelBytes.CopyTo(frame.OpaqueFramePixelBytes, 0);
+                return;
+            }
+
+            var OpaqueFramePixelBytes = new MemoryStream();
 
             var LeftmostChange = frame.Image.Width;
             var RightmostChange = 0;
             var TopmostChange = frame.Image.Height;
             var BottommostChange = 0;
 
-            if (frame == this.frames.First())
-            {
-                OpaqueFramePixelBytes = new MemoryStream(frame.PixelBytes);
-            }
-            else
-            {
-                OpaqueFramePixelBytes = new MemoryStream();
-                var FrameContributesChange = false;
+            var FrameContributesChange = false;
 
-                for (int i = 0; i < frame.PixelBytes.Length; i += 3)
+            for (int i = 0; i < frame.PixelBytes.Length; i += 3)
+            {
+                var PixelContributesChange = frame.PixelBytes[i] != this.CompositePixelBytes[i] || frame.PixelBytes[i + 1] != this.CompositePixelBytes[i + 1] || frame.PixelBytes[i + 2] != this.CompositePixelBytes[i + 2];
+                FrameContributesChange = FrameContributesChange || PixelContributesChange;
+
+                if (PixelContributesChange || !this.optimization.HasFlag(FrameOptimization.AutoTransparency))
                 {
-                    var PixelContributesChange = frame.PixelBytes[i] != this.CompositePixelBytes[i] || frame.PixelBytes[i + 1] != this.CompositePixelBytes[i + 1] || frame.PixelBytes[i + 2] != this.CompositePixelBytes[i + 2];
-                    FrameContributesChange = FrameContributesChange || PixelContributesChange;
+                    OpaqueFramePixelBytes.Write(frame.PixelBytes, i, 3);
 
-                    if (PixelContributesChange || !this.optimization.HasFlag(FrameOptimization.AutoTransparency))
+                    // retain a composite image, since we might be overwriting pixel bytes with transparency colors and won't be able to use those pixel bytes for future frame comparison
+                    this.CompositePixelBytes[i] = frame.PixelBytes[i];
+                    this.CompositePixelBytes[i + 1] = frame.PixelBytes[i + 1];
+                    this.CompositePixelBytes[i + 2] = frame.PixelBytes[i + 2];
+
+                    // keep track of the growing rect where pixels differ between frames
+                    // we can then clip the frame size to only this changed area
+                    if (this.optimization.HasFlag(FrameOptimization.ClipFrame))
                     {
-                        OpaqueFramePixelBytes.Write(frame.PixelBytes, i, 3);
+                        var x = (i / 3) % frame.Image.Width;
+                        var y = (i / 3) / frame.Image.Width;
 
-                        // retain a composite image, since we might be overwriting pixel bytes with transparency colors and won't be able to use those pixel bytes for future frame comparison
-                        this.CompositePixelBytes[i] = frame.PixelBytes[i];
-                        this.CompositePixelBytes[i + 1] = frame.PixelBytes[i + 1];
-                        this.CompositePixelBytes[i + 2] = frame.PixelBytes[i + 2];
+                        LeftmostChange = Math.Min(LeftmostChange, x);
+                        RightmostChange = Math.Max(RightmostChange, x);
 
-                        // keep track of the growing rect where pixels differ between frames
-                        // we can then clip the frame size to only this changed area
-                        if (this.optimization.HasFlag(FrameOptimization.ClipFrame))
-                        {
-                            var x = (i / 3) % frame.Image.Width;
-                            var y = (i / 3) / frame.Image.Width;
-
-                            LeftmostChange = Math.Min(LeftmostChange, x);
-                            RightmostChange = Math.Max(RightmostChange, x);
-
-                            TopmostChange = Math.Min(TopmostChange, y);
-                            BottommostChange = Math.Max(BottommostChange, y);
-                        }
+                        TopmostChange = Math.Min(TopmostChange, y);
+                        BottommostChange = Math.Max(BottommostChange, y);
                     }
-
-                    TransparentPixelIndexes[i / 3] = !PixelContributesChange && this.optimization.HasFlag(FrameOptimization.AutoTransparency);
                 }
 
-                if (!FrameContributesChange && this.optimization.HasFlag(FrameOptimization.DiscardDuplicates))
-                {
-                    return Tuple.Create<byte[], byte[]>(new byte[0], new byte[0]);
-                }
+                frame.TransparentPixelIndexes[i / 3] = !PixelContributesChange && this.optimization.HasFlag(FrameOptimization.AutoTransparency);
             }
 
+            frame.OpaqueFramePixelBytes = OpaqueFramePixelBytes.ToArray();
 
             // construct the shrunk frame rect out of the known bounds where the frame was different
             // difference should be inclusive (eg, left = 14px and right = 14px then 1px width) hence adding 1
-            if (frame == this.frames.First() || !this.optimization.HasFlag(FrameOptimization.ClipFrame))
-            {
-                frame.ChangeRect = new Rectangle(0, 0, frame.Image.Width, frame.Image.Height);
-            }
-            else
+            if (FrameContributesChange && this.optimization.HasFlag(FrameOptimization.ClipFrame))
             {
                 frame.ChangeRect = new Rectangle(LeftmostChange, TopmostChange, RightmostChange - LeftmostChange + 1, BottommostChange - TopmostChange + 1);
             }
+        }
 
-
+        Tuple<byte[], byte[]> AnalyzePixels(Frame frame)
+        {
             // totally exclude the transparency color from the quantization process, if there is one
             // reduce the quantizer max color space by 1 if we need to reserve a color table slot for the transparent color
-            var quantizer = new NeuQuant(OpaqueFramePixelBytes.ToArray(), 256 - (frame.Transparent.IsEmpty ? 0 : 1), (int)frame.Quality);
+            var quantizer = new NeuQuant(frame.OpaqueFramePixelBytes, 256 - (frame.Transparent.IsEmpty ? 0 : 1), (int)frame.Quality);
             var ColorTable = quantizer.process();
 
 
@@ -223,7 +219,7 @@ namespace FMUtils.AnimatedGifEncoder
                 }
 
                 // if this pixel is known as transparent, ignore the quantizer's result and write the color table & indexed pixel ourselves
-                if (TransparentPixelIndexes[i])
+                if (frame.TransparentPixelIndexes[i])
                 {
                     if (!TransparentColorWritten)
                     {
