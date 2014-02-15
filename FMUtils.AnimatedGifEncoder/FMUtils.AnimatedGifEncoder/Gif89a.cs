@@ -38,6 +38,12 @@ namespace FMUtils.AnimatedGifEncoder
 
         public void Dispose()
         {
+            if (this.optimization.HasFlag(FrameOptimization.DeferredProcessing))
+            {
+                foreach (var frame in this.frames)
+                    this.ProcessFrame(frame);
+            }
+
             GifFileFormat.WriteFileTrailer(output);
             output.Flush();
         }
@@ -57,8 +63,10 @@ namespace FMUtils.AnimatedGifEncoder
             if (this.Size == Size.Empty)
                 this.Size = frame.Image.Size;
 
-            frames.Add(frame);
-            this.ProcessFrame(frame);
+            this.frames.Add(frame);
+
+            if (!this.optimization.HasFlag(FrameOptimization.DeferredProcessing))
+                this.ProcessFrame(frame);
         }
 
         public void ProcessFrame(Frame frame)
