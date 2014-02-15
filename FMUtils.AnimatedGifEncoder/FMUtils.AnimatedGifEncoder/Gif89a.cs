@@ -50,6 +50,9 @@ namespace FMUtils.AnimatedGifEncoder
             if (this.optimization.HasFlag(FrameOptimization.AutoTransparency) && frame.Transparent != Color.Empty)
                 throw new ArgumentException("Frames may not have a manually specified transparent color when using AutoTransparency optimization", "frame");
 
+            if (this.frames.Contains(frame))
+                throw new ArgumentException("Frames may only be added once", "frame");
+
             // first frame sets the image dimensions
             if (this.Size == Size.Empty)
                 this.Size = frame.Image.Size;
