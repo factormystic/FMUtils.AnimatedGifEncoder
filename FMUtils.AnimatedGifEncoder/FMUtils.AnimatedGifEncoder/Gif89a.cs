@@ -92,20 +92,18 @@ namespace FMUtils.AnimatedGifEncoder
                 return;
             }
 
-            var analysis = this.AnalyzePixels(frame);
-            var indexedPixels = analysis.Item1;
-            var ColorTable = analysis.Item2;
+            this.AnalyzePixels(frame);
 
-            if (indexedPixels.Length == 0)
+            if (frame.IndexedPixels.Length == 0)
                 return;
 
             if (frame == this.frames.First())
             {
                 // logical screen descriptior
-                GifFileFormat.WriteLogicalScreenDescriptor(this.output, (ushort)this.Size.Width, (ushort)this.Size.Height, ColorTable.Length);
+                GifFileFormat.WriteLogicalScreenDescriptor(this.output, (ushort)this.Size.Width, (ushort)this.Size.Height, frame.ColorTableBytes.Length);
 
                 // global color table
-                GifFileFormat.WriteColorTable(this.output, ColorTable);
+                GifFileFormat.WriteColorTable(this.output, frame.ColorTableBytes);
 
                 if (this.Repeat >= 0)
                 {
@@ -119,16 +117,16 @@ namespace FMUtils.AnimatedGifEncoder
             GifFileFormat.WriteGraphicControlExtension(output, frame, frame.transIndex);
 
             // image descriptor
-            GifFileFormat.WriteImageDescriptor(this.output, frame.ChangeRect, ColorTable.Length, frame == this.frames.First());
+            GifFileFormat.WriteImageDescriptor(this.output, frame.ChangeRect, frame.ColorTableBytes.Length, frame == this.frames.First());
 
             if (frame != this.frames.First())
             {
                 // local color table
-                GifFileFormat.WriteColorTable(output, ColorTable);
+                GifFileFormat.WriteColorTable(this.output, frame.ColorTableBytes);
             }
 
             // encode and write pixel data
-            var lzw = new LZWEncoder(frame.ChangeRect.Width, frame.ChangeRect.Height, indexedPixels, 8);
+            var lzw = new LZWEncoder(frame.ChangeRect.Width, frame.ChangeRect.Height, frame.IndexedPixels, 8);
             lzw.encode(this.output);
         }
 
@@ -195,7 +193,7 @@ namespace FMUtils.AnimatedGifEncoder
             }
         }
 
-        Tuple<byte[], byte[]> AnalyzePixels(Frame frame)
+        void AnalyzePixels(Frame frame)
         {
             // totally exclude the transparency color from the quantization process, if there is one
             // reduce the quantizer max color space by 1 if we need to reserve a color table slot for the transparent color
@@ -297,7 +295,8 @@ namespace FMUtils.AnimatedGifEncoder
             }
 
 
-            return Tuple.Create<byte[], byte[]>(indexedPixels.ToArray(), ColorTableBytes.ToArray());
+            frame.IndexedPixels = indexedPixels.ToArray();
+            frame.ColorTableBytes = ColorTableBytes.ToArray();
         }
     }
 }

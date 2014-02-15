@@ -45,9 +45,11 @@ namespace FMUtils.AnimatedGifEncoder
         internal byte[] OpaqueFramePixelBytes { get; set; }
         internal bool[] TransparentPixelIndexes { get; set; }
 
+        internal byte[] ColorTableBytes { get; set; }
+        internal byte[] IndexedPixels { get; set; }
 
         internal long OutputStreamGCEIndex { get; set; }
-        
+
         internal byte transIndex = 0;
 
         internal Rectangle ChangeRect { get; set; }
