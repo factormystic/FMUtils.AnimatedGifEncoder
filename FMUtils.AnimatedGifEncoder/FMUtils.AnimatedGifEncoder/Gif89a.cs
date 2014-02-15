@@ -61,7 +61,10 @@ namespace FMUtils.AnimatedGifEncoder
             frames.Add(frame);
 
             if (frame == this.frames.First())
-                this.CompositePixelBytes = frame.PixelBytes;
+            {
+                this.CompositePixelBytes = new byte[frame.PixelBytes.Length];
+                frame.PixelBytes.CopyTo(this.CompositePixelBytes, 0);
+            }
 
             // build color table & map pixels
             var analysis = this.AnalyzePixels(frame);
