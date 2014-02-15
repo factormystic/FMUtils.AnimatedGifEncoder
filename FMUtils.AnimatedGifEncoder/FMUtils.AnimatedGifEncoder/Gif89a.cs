@@ -58,7 +58,11 @@ namespace FMUtils.AnimatedGifEncoder
                 this.Size = frame.Image.Size;
 
             frames.Add(frame);
+            this.ProcessFrame(frame);
+        }
 
+        public void ProcessFrame(Frame frame)
+        {
             // find transparent/opaque pixels and update the composite image
             this.AnalyzeFrame(frame);
 
