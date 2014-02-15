@@ -68,9 +68,6 @@ namespace FMUtils.AnimatedGifEncoder
 
             // build color table & map pixels
             this.AnalyzeFrame(frame);
-            var analysis = this.AnalyzePixels(frame);
-            var indexedPixels = analysis.Item1;
-            var ColorTable = analysis.Item2;
 
             // if we're discarding duplicate frames
             if (frame.OpaqueFramePixelBytes.Length == 0 && this.optimization.HasFlag(FrameOptimization.DiscardDuplicates))
@@ -91,7 +88,13 @@ namespace FMUtils.AnimatedGifEncoder
 
                 // jump forward to where we just were to continue on normally
                 this.output.Position = here;
+
+                return;
             }
+
+            var analysis = this.AnalyzePixels(frame);
+            var indexedPixels = analysis.Item1;
+            var ColorTable = analysis.Item2;
 
             if (indexedPixels.Length == 0)
                 return;
