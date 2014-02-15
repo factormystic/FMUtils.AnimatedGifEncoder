@@ -65,6 +65,27 @@ namespace FMUtils.AnimatedGifEncoder
             var indexedPixels = analysis.Item1;
             var ColorTable = analysis.Item2;
 
+            // if we're discarding duplicate frames
+            if (indexedPixels.Length == 0 && ColorTable.Length == 0 && this.optimization.HasFlag(FrameOptimization.DiscardDuplicates))
+            {
+                // hang on to where we currently are in the output stream
+                var here = this.output.Position;
+
+                // the last written GCE might be more than one frame back, if there's a bunch of duplicates
+                var prev = frame;
+                while (prev.OutputStreamGCEIndex == 0)
+                    prev = frames[frames.IndexOf(prev) - 1];
+
+                // jump back to the GCE in the previous frame
+                this.output.Position = prev.OutputStreamGCEIndex;
+
+                prev.Delay += frame.Delay;
+                GifFileFormat.WriteGraphicControlExtension(output, prev, prev.transIndex);
+
+                // jump forward to where we just were to continue on normally
+                this.output.Position = here;
+            }
+
             if (indexedPixels.Length == 0)
                 return;
 
@@ -156,23 +177,6 @@ namespace FMUtils.AnimatedGifEncoder
 
                 if (!FrameContributesChange && this.optimization.HasFlag(FrameOptimization.DiscardDuplicates))
                 {
-                    // hang on to where we currently are in the output stream
-                    var here = this.output.Position;
-
-                    // the last written GCE might be more than one frame back, if there's a bunch of duplicates
-                    var prev = frame;
-                    while (prev.OutputStreamGCEIndex == 0)
-                        prev = frames[frames.IndexOf(prev) - 1];
-
-                    // jump back to the GCE in the previous frame
-                    this.output.Position = prev.OutputStreamGCEIndex;
-
-                    prev.Delay += frame.Delay;
-                    GifFileFormat.WriteGraphicControlExtension(output, prev, prev.transIndex);
-
-                    // jump forward to where we just were to continue on normally
-                    this.output.Position = here;
-
                     return Tuple.Create<byte[], byte[]>(new byte[0], new byte[0]);
                 }
             }
