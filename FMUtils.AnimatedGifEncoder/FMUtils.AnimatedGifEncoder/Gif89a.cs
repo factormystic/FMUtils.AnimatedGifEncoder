@@ -1,8 +1,12 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace FMUtils.AnimatedGifEncoder
 {
@@ -16,63 +20,170 @@ namespace FMUtils.AnimatedGifEncoder
         /// <summary>
         /// Sets the number of times the set of GIF frames should be played.
         /// 0 means play indefinitely.
-        /// 
-        /// Must be invoked before the first image is added.
         /// </summary>
-        public ushort Repeat = 0;
+        public ushort Repeat { get; private set; }
 
         public FrameOptimization optimization { get; private set; }
 
         Stream output;
 
         List<Frame> frames = new List<Frame>();
-        byte[] CompositePixelBytes;
 
-        public Gif89a(Stream writeableStream, FrameOptimization optimization = FrameOptimization.None)
+        BlockingCollection<Frame> ProcessingQueue = new BlockingCollection<Frame>();
+        ManualResetEvent ProcessingComplete = new ManualResetEvent(false);
+
+        // lock object for this class's instance properties
+        object _gif = new object();
+
+
+        public Gif89a(Stream writeableStream, FrameOptimization optimization = FrameOptimization.None, ushort repeat = 0)
         {
             this.output = writeableStream;
             this.optimization = optimization;
+            this.Repeat = repeat;
 
-            GifFileFormat.WriteFileHeader(this.output);
+            // seems to be a bit faster if we leave one core of capacity for the calling thread
+            var MDOP = 1;// Environment.ProcessorCount - 1;
+            var tasks = new Task[MDOP];
+
+            for (int i = 0; i < MDOP; i++)
+            {
+                tasks[i] = Task.Factory.StartNew(this.Process);
+            }
+
+            // after all the workers complete, mark the completion queue as finished
+            Task.Factory.StartNew(new Action(() =>
+            {
+                Task.WaitAll(tasks);
+
+                Debug.WriteLine("Gif89a WaitAll (complete) [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId);
+                ProcessingComplete.Set();
+            }));
         }
 
         public void Dispose()
         {
-            if (this.optimization.HasFlag(FrameOptimization.DeferredProcessing))
-            {
-                foreach (var frame in this.frames)
-                    this.ProcessFrame(frame);
-            }
+            Trace.WriteLine(string.Format("Gif89a.Process [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId));
+
+            // drain out the processing threads
+            ProcessingQueue.CompleteAdding();
+
+            // wait for all the processing threads to complete
+            ProcessingComplete.WaitOne();
+
+            GifFileFormat.WriteFileHeader(this.output);
+
+            foreach (var frame in this.frames)
+                this.WriteFrame(frame);
 
             GifFileFormat.WriteFileTrailer(output);
             output.Flush();
         }
 
+        /// <summary>
+        /// Add a frame to the gif and queue it for processing. This method is thread safe.
+        /// </summary>
         public void AddFrame(Frame frame)
         {
+            Trace.WriteLine(string.Format("Gif89a.AddFrame [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId));
+
             if (frame == null)
                 throw new ArgumentNullException("frame");
 
             if (this.optimization.HasFlag(FrameOptimization.AutoTransparency) && frame.Transparent != Color.Empty)
                 throw new ArgumentException("Frames may not have a manually specified transparent color when using AutoTransparency optimization", "frame");
 
-            if (this.frames.Contains(frame))
-                throw new ArgumentException("Frames may only be added once", "frame");
+            lock (_gif)
+            {
+                if (this.frames.Contains(frame))
+                    throw new ArgumentException("Frames may only be added once", "frame");
 
-            // first frame sets the image dimensions
-            if (this.Size == Size.Empty)
-                this.Size = frame.Image.Size;
+                // first frame sets the image dimensions
+                if (this.Size == Size.Empty)
+                    this.Size = frame.Image.Size;
+            }
 
-            this.frames.Add(frame);
+            frame.PixelBytes = frame.GetPixelBytes();
 
-            if (!this.optimization.HasFlag(FrameOptimization.DeferredProcessing))
-                this.ProcessFrame(frame);
+            // we have to add the frame to the frames list before adding it to to the processing queue,
+            // but if the processing queue is closed, we need to take it back out again, since it won't be written
+            // this can happen when AddFrame is called after Dispose
+            lock (_gif)
+            {
+                this.frames.Add(frame);
+
+                try
+                {
+                    this.ProcessingQueue.Add(frame);
+                }
+                catch (InvalidOperationException)
+                {
+                    this.frames.Remove(frame);
+                }
+            }
         }
 
-        public void ProcessFrame(Frame frame)
+        void Process()
         {
-            // find transparent/opaque pixels and update the composite image
-            this.AnalyzeFrame(frame);
+            try
+            {
+                if (ProcessingQueue.IsCompleted)
+                {
+                    Trace.WriteLine("All done adding frames, breaking out...", string.Format("Gif89a.Process [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId));
+                    return;
+                }
+
+                //retry:
+                //    Frame frame;
+                //    if (ProcessingQueue.TryTake(out frame, 10))
+                //    {
+                //        Trace.WriteLine("Analyzing frame...", string.Format("Gif89a.Process [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId));
+
+                //        var start = DateTime.UtcNow;
+
+                //        // find transparent/opaque pixels and update the composite image
+                //        this.AnalyzeFrame(frame);
+
+                //        // build color table & map pixels
+                //        this.AnalyzePixels(frame);
+
+                //        Trace.WriteLine("Done (" + (DateTime.UtcNow - start).TotalMilliseconds + ")", string.Format("Gif89a.Process [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId));
+                //    }
+                //    else
+                //    {
+                //        if (!ProcessingQueue.IsCompleted)
+                //            goto retry;
+                //    }
+
+                var frame = ProcessingQueue.Take();
+
+                Trace.WriteLine("Analyzing frame...", string.Format("Gif89a.Process [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId));
+
+                var start = DateTime.UtcNow;
+
+                // find transparent/opaque pixels and update the composite image
+                this.AnalyzeFrame(frame);
+
+                // build color table & map pixels
+                this.AnalyzePixels(frame);
+
+                Trace.WriteLine("Done (" + (DateTime.UtcNow - start).TotalMilliseconds + ")", string.Format("Gif89a.Process [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId));
+
+                Process();
+            }
+            catch (Exception e)
+            {
+                Trace.WriteLine("Exception: " + e.Message, string.Format("Gif89a.Process [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId));
+                return;
+            }
+        }
+
+        void WriteFrame(Frame frame)
+        {
+            Trace.WriteLine(string.Format("Gif89a.WriteFrame [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId));
+
+            if (frame.OpaqueFramePixelBytes == null)
+                return;
 
             // if we're discarding duplicate frames
             if (frame.OpaqueFramePixelBytes.Length == 0 && this.optimization.HasFlag(FrameOptimization.DiscardDuplicates))
@@ -83,7 +194,7 @@ namespace FMUtils.AnimatedGifEncoder
                 // the last written GCE might be more than one frame back, if there's a bunch of duplicates
                 var prev = frame;
                 while (prev.OutputStreamGCEIndex == 0)
-                    prev = frames[frames.IndexOf(prev) - 1];
+                    prev = this.frames[this.frames.IndexOf(prev) - 1];
 
                 // jump back to the GCE in the previous frame
                 this.output.Position = prev.OutputStreamGCEIndex;
@@ -97,15 +208,12 @@ namespace FMUtils.AnimatedGifEncoder
                 return;
             }
 
-            // build color table & map pixels
-            this.AnalyzePixels(frame);
-
             if (frame.IndexedPixels.Length == 0)
                 return;
 
             if (frame == this.frames.First())
             {
-                // logical screen descriptior
+                // logical screen descriptor
                 GifFileFormat.WriteLogicalScreenDescriptor(this.output, (ushort)this.Size.Width, (ushort)this.Size.Height, frame.ColorTableBytes.Length);
 
                 // global color table
@@ -138,14 +246,15 @@ namespace FMUtils.AnimatedGifEncoder
 
         void AnalyzeFrame(Frame frame)
         {
-            frame.PixelBytes = frame.GetPixelBytes();
+            Trace.WriteLine(string.Format("Gif89a.AnalyzeFrame [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId));
+
             frame.ChangeRect = new Rectangle(0, 0, frame.Image.Width, frame.Image.Height);
             frame.TransparentPixelIndexes = new bool[frame.PixelBytes.Length / 3];
 
             if (frame == this.frames.First())
             {
-                this.CompositePixelBytes = new byte[frame.PixelBytes.Length];
-                frame.PixelBytes.CopyTo(this.CompositePixelBytes, 0);
+                //this.CompositePixelBytes = new byte[frame.PixelBytes.Length];
+                //frame.PixelBytes.CopyTo(this.CompositePixelBytes, 0);
 
                 frame.OpaqueFramePixelBytes = new byte[frame.PixelBytes.Length];
                 frame.PixelBytes.CopyTo(frame.OpaqueFramePixelBytes, 0);
@@ -160,19 +269,26 @@ namespace FMUtils.AnimatedGifEncoder
             var TopmostChange = frame.Image.Height;
             var BottommostChange = 0;
 
+            var prev = this.frames[this.frames.IndexOf(frame) - 1];
+
             for (int i = 0; i < frame.PixelBytes.Length; i += 3)
             {
-                var PixelContributesChange = frame.PixelBytes[i] != this.CompositePixelBytes[i] || frame.PixelBytes[i + 1] != this.CompositePixelBytes[i + 1] || frame.PixelBytes[i + 2] != this.CompositePixelBytes[i + 2];
+                //var PixelContributesChange = frame.PixelBytes[i] != this.CompositePixelBytes[i] || frame.PixelBytes[i + 1] != this.CompositePixelBytes[i + 1] || frame.PixelBytes[i + 2] != this.CompositePixelBytes[i + 2];
+                var PixelContributesChange = frame.PixelBytes[i] != prev.PixelBytes[i] || frame.PixelBytes[i + 1] != prev.PixelBytes[i + 1] || frame.PixelBytes[i + 2] != prev.PixelBytes[i + 2];
                 FrameContributesChange = FrameContributesChange || PixelContributesChange;
 
                 if (PixelContributesChange || !this.optimization.HasFlag(FrameOptimization.AutoTransparency))
                 {
                     OpaqueFramePixelBytes.Write(frame.PixelBytes, i, 3);
 
-                    // retain a composite image, since we might be overwriting pixel bytes with transparency colors and won't be able to use those pixel bytes for future frame comparison
-                    this.CompositePixelBytes[i] = frame.PixelBytes[i];
-                    this.CompositePixelBytes[i + 1] = frame.PixelBytes[i + 1];
-                    this.CompositePixelBytes[i + 2] = frame.PixelBytes[i + 2];
+                    // no more color overwrites, no more composite
+                    //// retain a composite image, since we might be overwriting pixel bytes with transparency colors and won't be able to use those pixel bytes for future frame comparison
+                    //lock (_compositeLock)
+                    //{
+                    //    this.CompositePixelBytes[i] = frame.PixelBytes[i];
+                    //    this.CompositePixelBytes[i + 1] = frame.PixelBytes[i + 1];
+                    //    this.CompositePixelBytes[i + 2] = frame.PixelBytes[i + 2];
+                    //}
 
                     // keep track of the growing rect where pixels differ between frames
                     // we can then clip the frame size to only this changed area
@@ -204,6 +320,10 @@ namespace FMUtils.AnimatedGifEncoder
 
         void AnalyzePixels(Frame frame)
         {
+            Trace.WriteLine(string.Format("Gif89a.AnalyzePixels [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId));
+            //Thread.Sleep(1000);
+
+
             // totally exclude the transparency color from the quantization process, if there is one
             // reduce the quantizer max color space by 1 if we need to reserve a color table slot for the transparent color
 

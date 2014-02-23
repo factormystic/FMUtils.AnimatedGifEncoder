@@ -1,5 +1,6 @@
 ﻿using System.Drawing;
 using System.Runtime.InteropServices;
+using System;
 
 namespace FMUtils.AnimatedGifEncoder
 {
@@ -54,7 +55,6 @@ namespace FMUtils.AnimatedGifEncoder
 
         internal Rectangle ChangeRect { get; set; }
 
-
         public Frame(string filename, ushort delay = 67, ColorQuantizationQuality quality = ColorQuantizationQuality.Reasonable)
         {
             this.Image = new Bitmap(filename);
@@ -89,7 +89,7 @@ namespace FMUtils.AnimatedGifEncoder
         internal byte[] GetPixelBytes()
         {
             // I'm pretty sure that "Format24bppRgb" is a lie, since the data is coming out BGR
-            var ImgData = this.Image.LockBits(new Rectangle(0, 0, this.Image.Width, this.Image.Height), System.Drawing.Imaging.ImageLockMode.ReadWrite, System.Drawing.Imaging.PixelFormat.Format24bppRgb);
+            var ImgData = this.Image.LockBits(new Rectangle(0, 0, this.Image.Width, this.Image.Height), System.Drawing.Imaging.ImageLockMode.ReadOnly, System.Drawing.Imaging.PixelFormat.Format24bppRgb);
 
             // stride != run of pixel data bytes, cf. http://bobpowell.net/lockingbits.aspx
             var ByteDepth = System.Drawing.Bitmap.GetPixelFormatSize(ImgData.PixelFormat) / 8;

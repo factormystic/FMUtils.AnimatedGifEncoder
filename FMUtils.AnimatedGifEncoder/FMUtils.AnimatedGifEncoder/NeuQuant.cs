@@ -269,7 +269,38 @@ namespace FMUtils.AnimatedGifEncoder
                         if (a < 0)
                             a = -a;
 
+<<<<<<< HEAD
                         dist += a;
+=======
+        //public byte[] colorMap()
+        public int[][] colorMap()
+        {
+            //byte[] map = new byte[3 * netsize];
+            //int[] index = new int[netsize];
+            //for (int i = 0; i < netsize; i++)
+            //    index[network[i][3]] = i;
+            //int k = 0;
+            //for (int i = 0; i < netsize; i++)
+            //{
+            //    int j = index[i];
+            //    map[k++] = (byte)(network[j][0]);
+            //    map[k++] = (byte)(network[j][1]);
+            //    map[k++] = (byte)(network[j][2]);
+            //}
+            //return map;
+
+
+            //byte[] map = new byte[3 * netsize];
+
+            //for (int i = 0; i < netsize; i += 3)
+            //{
+            //    map[i] = (byte)network[i / 3][0];
+            //    map[i + 1] = (byte)network[i / 3][1];
+            //    map[i + 2] = (byte)network[i / 3][2];
+            //}
+
+            //return map;
+>>>>>>> work in progress
 
                         if (dist < bestd)
                         {
@@ -443,10 +474,21 @@ namespace FMUtils.AnimatedGifEncoder
                     this.network[i][3] = j;
                 }
 
+<<<<<<< HEAD
                 /* smallval entry is now in position i */
                 if (smallval != previouscol)
                 {
                     this.netindex[previouscol] = (startpos + i) >> 1;
+=======
+        //public byte[] process()
+        public int[][] process()
+        {
+            learn();
+            unbiasnet();
+            inxbuild();
+            return colorMap();
+        }
+>>>>>>> work in progress
 
                     for (j = previouscol + 1; j < smallval; j++)
                         this.netindex[j] = i;
