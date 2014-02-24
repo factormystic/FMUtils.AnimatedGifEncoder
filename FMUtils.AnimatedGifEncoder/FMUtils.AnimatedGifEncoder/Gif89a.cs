@@ -208,7 +208,7 @@ namespace FMUtils.AnimatedGifEncoder
             // reduce the quantizer max color space by 1 if we need to reserve a color table slot for the transparent color
 
             var quantizer = new NeuQuant(frame.OpaqueFramePixelBytes, 256 - (frame.TransparentPixelIndexes.Any(i => i) ? 1 : 0), (int)frame.Quality);
-            var ColorTable = quantizer.process();
+            var ColorTable = quantizer.Process();
 
             // map image pixels to new palette
             var indexedPixels = new MemoryStream();
@@ -249,7 +249,7 @@ namespace FMUtils.AnimatedGifEncoder
                 }
 
                 // "index" according to the quantizer's internal structure
-                int index = quantizer.map(frame.PixelBytes[i * 3], frame.PixelBytes[i * 3 + 1], frame.PixelBytes[i * 3 + 2]);
+                int index = quantizer.Map(frame.PixelBytes[i * 3], frame.PixelBytes[i * 3 + 1], frame.PixelBytes[i * 3 + 2]);
 
                 if (QuantizedIndexToColorTableIndex.ContainsKey(index))
                 {
