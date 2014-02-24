@@ -206,9 +206,9 @@ namespace FMUtils.AnimatedGifEncoder
         {
             // totally exclude the transparency color from the quantization process, if there is one
             // reduce the quantizer max color space by 1 if we need to reserve a color table slot for the transparent color
-            var quantizer = new NeuQuant(frame.OpaqueFramePixelBytes, 256 - (frame.Transparent.IsEmpty ? 0 : 1), (int)frame.Quality);
-            var ColorTable = quantizer.process();
 
+            var quantizer = new NeuQuant(frame.OpaqueFramePixelBytes, 256 - (frame.TransparentPixelIndexes.Any(i => i) ? 1 : 0), (int)frame.Quality);
+            var ColorTable = quantizer.process();
 
             // map image pixels to new palette
             var indexedPixels = new MemoryStream();
@@ -283,6 +283,9 @@ namespace FMUtils.AnimatedGifEncoder
             // GIF color tables are essentially powers of 2 length only
             // pad out the compact color table to the next largest power of two (times 3) bytes
             // see the notes where the Global Color Table is written for details.
+            if (ColorTableBytes.Length / 3 > 256)
+                throw new InvalidOperationException(string.Format("Gif89a color tables may have at most 256 colors, but {0} colors were used in the frame", ColorTableBytes.Length / 3));
+
             var padding = 0;
             for (int i = 7; i >= 0; i--)
             {
