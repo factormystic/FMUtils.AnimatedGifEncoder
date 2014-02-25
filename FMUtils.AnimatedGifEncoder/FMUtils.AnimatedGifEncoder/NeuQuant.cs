@@ -120,17 +120,17 @@ namespace FMUtils.AnimatedGifEncoder
         static int alpharadbshift = (alphabiasshift + radbiasshift);
 
         static int alpharadbias = (((int)1) << alpharadbshift);
-        
+
         /// <summary>
         /// the input image itself
         /// </summary>
         byte[] thepicture;
-        
+
         /// <summary>
         /// sampling factor 1..30
         /// </summary>
         int samplefac;
-        
+
         /// <summary>
         /// the network itself - [netsize][4]
         /// </summary>
@@ -301,49 +301,49 @@ namespace FMUtils.AnimatedGifEncoder
         {
             int step;
 
-            int alphadec = 30 + ((samplefac - 1) / 3);
+            int alphadec = 30 + ((this.samplefac - 1) / 3);
             int pix = 0;
-            int samplepixels = this.thepicture.Length / (3 * samplefac);
+            int samplepixels = this.thepicture.Length / (3 * this.samplefac);
             int alpha = NeuQuant.initalpha;
-            int radius = initradius;
+            int radius = this.initradius;
 
-            int rad = radius >> radiusbiasshift;
+            int rad = radius >> this.radiusbiasshift;
             if (rad <= 1)
                 rad = 0;
 
             for (int n = 0; n < rad; n++)
             {
-                radpower[n] = alpha * (((rad * rad - n * n) * radbias) / (rad * rad));
+                this.radpower[n] = alpha * (((rad * rad - n * n) * NeuQuant.radbias) / (rad * rad));
             }
 
-            if (this.thepicture.Length < minpicturebytes)
+            if (this.thepicture.Length < NeuQuant.minpicturebytes)
             {
                 step = 3;
             }
-            else if ((this.thepicture.Length % prime1) != 0)
+            else if ((this.thepicture.Length % NeuQuant.prime1) != 0)
             {
-                step = 3 * prime1;
+                step = 3 * NeuQuant.prime1;
             }
             else
             {
-                if ((this.thepicture.Length % prime2) != 0)
+                if ((this.thepicture.Length % NeuQuant.prime2) != 0)
                 {
-                    step = 3 * prime2;
+                    step = 3 * NeuQuant.prime2;
                 }
                 else
                 {
-                    if ((this.thepicture.Length % prime3) != 0)
+                    if ((this.thepicture.Length % NeuQuant.prime3) != 0)
                     {
-                        step = 3 * prime3;
+                        step = 3 * NeuQuant.prime3;
                     }
                     else
                     {
-                        step = 3 * prime4;
+                        step = 3 * NeuQuant.prime4;
                     }
                 }
             }
 
-            int delta = samplepixels / ncycles;
+            int delta = samplepixels / NeuQuant.ncycles;
             if (delta == 0)
                 delta = 1;
 
@@ -372,9 +372,11 @@ namespace FMUtils.AnimatedGifEncoder
                 {
                     alpha -= alpha / alphadec;
                     radius -= radius / NeuQuant.radiusdec;
+
                     rad = radius >> radiusbiasshift;
                     if (rad <= 1)
                         rad = 0;
+
                     for (j = 0; j < rad; j++)
                         radpower[j] = alpha * (((rad * rad - j * j) * radbias) / (rad * rad));
                 }
@@ -469,13 +471,8 @@ namespace FMUtils.AnimatedGifEncoder
         /// </summary>
         void AlterNeighbor(int rad, int i, int b, int g, int r)
         {
-            int lo = i - rad;
-            if (lo < -1)
-                lo = -1;
-
-            int hi = i + rad;
-            if (hi > netsize)
-                hi = netsize;
+            int lo = Math.Max(i - rad, -1);
+            int hi = Math.Min(i + rad, this.netsize);
 
             int j = i + 1;
             int k = i - 1;
@@ -523,9 +520,9 @@ namespace FMUtils.AnimatedGifEncoder
         /// </summary>
         void AlterSingle(int alpha, int i, int b, int g, int r)
         {
-            this.network[i][0] -= (alpha * (this.network[i][0] - b)) / initalpha;
-            this.network[i][1] -= (alpha * (this.network[i][1] - g)) / initalpha;
-            this.network[i][2] -= (alpha * (this.network[i][2] - r)) / initalpha;
+            this.network[i][0] -= (alpha * (this.network[i][0] - b)) / NeuQuant.initalpha;
+            this.network[i][1] -= (alpha * (this.network[i][1] - g)) / NeuQuant.initalpha;
+            this.network[i][2] -= (alpha * (this.network[i][2] - r)) / NeuQuant.initalpha;
         }
 
         /// <summary>
@@ -538,8 +535,6 @@ namespace FMUtils.AnimatedGifEncoder
             /* for frequently chosen neurons, freq[i] is high and bias[i] is negative */
             /* bias[i] = gamma*((1/netsize)-freq[i]) */
 
-            int dist, a, biasdist, betafreq;
-
             int bestd = ~(((int)1) << 31);
             int bestbiasd = bestd;
             int bestpos = -1;
@@ -547,19 +542,12 @@ namespace FMUtils.AnimatedGifEncoder
 
             for (int i = 0; i < netsize; i++)
             {
-                dist = this.network[i][0] - b;
-                if (dist < 0)
-                    dist = -dist;
-
-                a = this.network[i][1] - g;
-                if (a < 0)
-                    a = -a;
+                int dist = Math.Abs(this.network[i][0] - b);
+                int a = Math.Abs(this.network[i][1] - g);
 
                 dist += a;
 
-                a = this.network[i][2] - r;
-                if (a < 0)
-                    a = -a;
+                a = Math.Abs(this.network[i][2] - r);
 
                 dist += a;
 
@@ -569,7 +557,7 @@ namespace FMUtils.AnimatedGifEncoder
                     bestpos = i;
                 }
 
-                biasdist = dist - ((this.bias[i]) >> (NeuQuant.intbiasshift - NeuQuant.netbiasshift));
+                int biasdist = dist - ((this.bias[i]) >> (NeuQuant.intbiasshift - NeuQuant.netbiasshift));
 
                 if (biasdist < bestbiasd)
                 {
@@ -577,9 +565,9 @@ namespace FMUtils.AnimatedGifEncoder
                     bestbiaspos = i;
                 }
 
-                betafreq = (this.freq[i] >> NeuQuant.betashift);
+                int betafreq = this.freq[i] >> NeuQuant.betashift;
                 this.freq[i] -= betafreq;
-                this.bias[i] += (betafreq << NeuQuant.gammashift);
+                this.bias[i] += betafreq << NeuQuant.gammashift;
             }
 
             this.freq[bestpos] += NeuQuant.beta;
