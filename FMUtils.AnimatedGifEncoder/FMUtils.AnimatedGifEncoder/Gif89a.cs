@@ -133,28 +133,6 @@ namespace FMUtils.AnimatedGifEncoder
                     return;
                 }
 
-                //retry:
-                //    Frame frame;
-                //    if (ProcessingQueue.TryTake(out frame, 10))
-                //    {
-                //        Trace.WriteLine("Analyzing frame...", string.Format("Gif89a.Process [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId));
-
-                //        var start = DateTime.UtcNow;
-
-                //        // find transparent/opaque pixels and update the composite image
-                //        this.AnalyzeFrame(frame);
-
-                //        // build color table & map pixels
-                //        this.AnalyzePixels(frame);
-
-                //        Trace.WriteLine("Done (" + (DateTime.UtcNow - start).TotalMilliseconds + ")", string.Format("Gif89a.Process [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId));
-                //    }
-                //    else
-                //    {
-                //        if (!ProcessingQueue.IsCompleted)
-                //            goto retry;
-                //    }
-
                 var frame = ProcessingQueue.Take();
 
                 Trace.WriteLine("Analyzing frame...", string.Format("Gif89a.Process [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId));
@@ -281,15 +259,6 @@ namespace FMUtils.AnimatedGifEncoder
                 {
                     OpaqueFramePixelBytes.Write(frame.PixelBytes, i, 3);
 
-                    // no more color overwrites, no more composite
-                    //// retain a composite image, since we might be overwriting pixel bytes with transparency colors and won't be able to use those pixel bytes for future frame comparison
-                    //lock (_compositeLock)
-                    //{
-                    //    this.CompositePixelBytes[i] = frame.PixelBytes[i];
-                    //    this.CompositePixelBytes[i + 1] = frame.PixelBytes[i + 1];
-                    //    this.CompositePixelBytes[i + 2] = frame.PixelBytes[i + 2];
-                    //}
-
                     // keep track of the growing rect where pixels differ between frames
                     // we can then clip the frame size to only this changed area
                     if (this.optimization.HasFlag(FrameOptimization.ClipFrame))
@@ -321,8 +290,6 @@ namespace FMUtils.AnimatedGifEncoder
         void AnalyzePixels(Frame frame)
         {
             Trace.WriteLine(string.Format("Gif89a.AnalyzePixels [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId));
-            //Thread.Sleep(1000);
-
 
             // totally exclude the transparency color from the quantization process, if there is one
             // reduce the quantizer max color space by 1 if we need to reserve a color table slot for the transparent color
@@ -334,7 +301,6 @@ namespace FMUtils.AnimatedGifEncoder
             var QuantizedIndexToColorTableIndex = new Dictionary<int, byte>();
             var ColorTableBytes = new MemoryStream();
             var TransparentColorWritten = false;
-
 
             for (int i = 0; i < frame.PixelBytes.Length / 3; i++)
             {
@@ -398,7 +364,6 @@ namespace FMUtils.AnimatedGifEncoder
                 }
             }
 
-
             // GIF color tables are essentially powers of 2 length only
             // pad out the compact color table to the next largest power of two (times 3) bytes
             // see the notes where the Global Color Table is written for details.
@@ -416,7 +381,6 @@ namespace FMUtils.AnimatedGifEncoder
             if (padding > 0)
                 ColorTableBytes.Write(new byte[padding], 0, padding);
 
-
             // if we ended up not needing the transparency color (ex: used frame clipping, and all the pixels inside were changed colors)
             // then make sure to reset the frame transparency so we don't try to use it later
             if (!TransparentColorWritten)
@@ -424,7 +388,6 @@ namespace FMUtils.AnimatedGifEncoder
                 frame.Transparent = Color.Empty;
                 frame.transIndex = 0;
             }
-
 
             frame.IndexedPixels = indexedPixels.ToArray();
             frame.ColorTableBytes = ColorTableBytes.ToArray();
