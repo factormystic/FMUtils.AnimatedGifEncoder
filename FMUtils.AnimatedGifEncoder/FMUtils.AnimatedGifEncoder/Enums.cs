@@ -10,7 +10,7 @@ namespace FMUtils.AnimatedGifEncoder
         Fast = 20,
     };
 
-    public enum DisposalMethod
+    public enum FrameDisposalMethod
     {
         Unspecified = 0,
         DoNotDispose = 1,

@@ -28,7 +28,7 @@ namespace FMUtils.AnimatedGifEncoder
         /// subsequent frames. Default is 0 if no transparent color has been set,
         /// otherwise 2.
         /// </summary>
-        public DisposalMethod Dispose = DisposalMethod.Unspecified;
+        public FrameDisposalMethod DisposalMethod = FrameDisposalMethod.Unspecified;
 
         /// <summary>
         /// default sample interval for quantizer

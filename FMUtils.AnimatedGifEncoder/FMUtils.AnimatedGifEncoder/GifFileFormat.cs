@@ -123,19 +123,19 @@ namespace FMUtils.AnimatedGifEncoder
             output.WriteByte(GifFileFormat.GRAPHIC_CONTROL_EXTENSION_BLOCK_SIZE);
 
             byte transp = 0x00;
-            var disposal = DisposalMethod.Unspecified;
+            var disposal = FrameDisposalMethod.Unspecified;
 
             if (frame.Transparent != Color.Empty)
             {
                 transp = 1;
 
                 // force clear if using transparent color
-                disposal = DisposalMethod.RestoreBackgroundColor;
+                disposal = FrameDisposalMethod.RestoreBackgroundColor;
             }
 
-            if (frame.Dispose != DisposalMethod.Unspecified)
+            if (frame.DisposalMethod != FrameDisposalMethod.Unspecified)
             {
-                disposal = frame.Dispose;
+                disposal = frame.DisposalMethod;
             }
 
             // packed fields
