@@ -32,6 +32,9 @@ namespace FMUtils.AnimatedGifEncoder
         BlockingCollection<Frame> ProcessingQueue = new BlockingCollection<Frame>();
         ManualResetEvent ProcessingComplete = new ManualResetEvent(false);
 
+        BlockingCollection<Frame> FrameWriteQueue = new BlockingCollection<Frame>();
+        ManualResetEvent FrameWriteComplete = new ManualResetEvent(false);
+
         // lock object for this class's instance properties
         object _gif = new object();
 
@@ -59,6 +62,11 @@ namespace FMUtils.AnimatedGifEncoder
                 Debug.WriteLine("Gif89a WaitAll (complete) [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId);
                 ProcessingComplete.Set();
             }));
+
+            if (!this.optimization.HasFlag(FrameOptimization.DeferredStreamWrite))
+            {
+                Task.Factory.StartNew(this.WriteGifToStream);
+            }
         }
 
         public void Dispose()
@@ -71,13 +79,16 @@ namespace FMUtils.AnimatedGifEncoder
             // wait for all the processing threads to complete
             ProcessingComplete.WaitOne();
 
-            GifFileFormat.WriteFileHeader(this.output);
+            // once processing is done, all the frames have definitely been added to the write queue
+            FrameWriteQueue.CompleteAdding();
 
-            foreach (var frame in this.frames)
-                this.WriteFrame(frame);
+            if (this.optimization.HasFlag(FrameOptimization.DeferredStreamWrite))
+            {
+                this.WriteGifToStream();
+            }
 
-            GifFileFormat.WriteFileTrailer(output);
-            output.Flush();
+            // wait for the frame write to complete (might have already been completed just now, above)
+            FrameWriteComplete.WaitOne();
         }
 
         /// <summary>
@@ -145,6 +156,9 @@ namespace FMUtils.AnimatedGifEncoder
                 // build color table & map pixels
                 this.AnalyzePixels(frame);
 
+                // after analysis is complete, the frame is ready to be written out
+                FrameWriteQueue.Add(frame);
+
                 Trace.WriteLine("Done (" + (DateTime.UtcNow - start).TotalMilliseconds + ")", string.Format("Gif89a.Process [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId));
 
                 Process();
@@ -154,6 +168,45 @@ namespace FMUtils.AnimatedGifEncoder
                 Trace.WriteLine("Exception: " + e.Message, string.Format("Gif89a.Process [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId));
                 return;
             }
+        }
+
+        void WriteGifToStream()
+        {
+            Trace.WriteLine(string.Format("Gif89a.WriteGifToStream [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId));
+
+            GifFileFormat.WriteFileHeader(this.output);
+
+            var nextFrameIndex = 0;
+            var pendingFrames = new List<Frame>();
+
+            while (!FrameWriteQueue.IsCompleted)
+            {
+                var someFrame = FrameWriteQueue.Take();
+
+                if (someFrame == null)
+                {
+                    Debugger.Break();
+                }
+
+                // frame analysis could can (and does!) occur out-of-order
+                // so every time a frame is popped from the FrameWriteQueue, it might not be the "next" frame
+                // no problem: just hang on to the writable frames and then write as much as possible in order
+                pendingFrames.Add(someFrame);
+
+                while (nextFrameIndex < this.frames.Count && pendingFrames.Contains(this.frames[nextFrameIndex]))
+                {
+                    this.WriteFrame(this.frames[nextFrameIndex]);
+                    nextFrameIndex++;
+                }
+            }
+
+            GifFileFormat.WriteFileTrailer(output);
+            output.Flush();
+
+            Trace.WriteLine("Done", string.Format("Gif89a.WriteGifToStream [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId));
+
+            // announce that stream writing is done
+            FrameWriteComplete.Set();
         }
 
         void WriteFrame(Frame frame)

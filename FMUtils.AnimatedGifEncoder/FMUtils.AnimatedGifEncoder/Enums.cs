@@ -44,8 +44,7 @@ namespace FMUtils.AnimatedGifEncoder
 
         /// <summary>
         /// Instead of running processing the frame and writing it to the output stream when it is added, this flag will wait to do that until Dispose()
-        /// This is especially preferable if frames are being generated as they are added to the gif.
         /// </summary>
-        DeferredProcessing = 8
+        DeferredStreamWrite = 8
     };
 }
