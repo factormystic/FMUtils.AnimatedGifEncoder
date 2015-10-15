@@ -51,7 +51,7 @@ namespace FMUtils.AnimatedGifEncoder
 
             for (int i = 0; i < MDOP; i++)
             {
-                tasks[i] = Task.Factory.StartNew(this.Process);
+                tasks[i] = Task.Factory.StartNew(this.ProcessFrames);
             }
 
             // after all the workers complete, mark the completion queue as finished
@@ -59,7 +59,7 @@ namespace FMUtils.AnimatedGifEncoder
             {
                 Task.WaitAll(tasks);
 
-                Debug.WriteLine("Gif89a WaitAll (complete) [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId);
+                Debug.WriteLine("Processing complete", string.Format("Gif89a [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId));
                 ProcessingComplete.Set();
             }));
 
@@ -134,19 +134,16 @@ namespace FMUtils.AnimatedGifEncoder
             }
         }
 
-        void Process()
+        void ProcessFrames()
         {
-            try
-            {
-                if (ProcessingQueue.IsCompleted)
-                {
-                    Trace.WriteLine("All done adding frames, breaking out...", string.Format("Gif89a.Process [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId));
-                    return;
-                }
+            Trace.WriteLine(string.Format("Gif89a.ProcessFrames [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId));
 
+            while (!ProcessingQueue.IsCompleted)
+            {
+                // todo: is it a bug that we'll block on take but then another thead will call CompleteAdding? what happens in that case?
                 var frame = ProcessingQueue.Take();
 
-                Trace.WriteLine("Analyzing frame...", string.Format("Gif89a.Process [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId));
+                Trace.WriteLine("Analyzing frame...", string.Format("Gif89a.ProcessFrames [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId));
 
                 var start = DateTime.UtcNow;
 
@@ -159,15 +156,10 @@ namespace FMUtils.AnimatedGifEncoder
                 // after analysis is complete, the frame is ready to be written out
                 FrameWriteQueue.Add(frame);
 
-                Trace.WriteLine("Done (" + (DateTime.UtcNow - start).TotalMilliseconds + ")", string.Format("Gif89a.Process [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId));
+                Trace.WriteLine("Done (" + (DateTime.UtcNow - start).TotalMilliseconds + ")", string.Format("Gif89a.ProcessFrames [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId));
+            }
 
-                Process();
-            }
-            catch (Exception e)
-            {
-                Trace.WriteLine("Exception: " + e.Message, string.Format("Gif89a.Process [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId));
-                return;
-            }
+            Trace.WriteLine("Done", string.Format("Gif89a.ProcessFrames [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId));
         }
 
         void WriteGifToStream()
