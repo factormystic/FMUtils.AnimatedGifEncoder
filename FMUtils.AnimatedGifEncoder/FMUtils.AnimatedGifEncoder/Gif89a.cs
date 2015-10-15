@@ -71,7 +71,7 @@ namespace FMUtils.AnimatedGifEncoder
 
         public void Dispose()
         {
-            Trace.WriteLine(string.Format("Gif89a.Process [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId));
+            Trace.WriteLine(string.Format("Gif89a.Dispose [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId));
 
             // drain out the processing threads
             ProcessingQueue.CompleteAdding();
