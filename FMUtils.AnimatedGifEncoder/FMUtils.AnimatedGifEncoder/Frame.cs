@@ -54,9 +54,14 @@ namespace FMUtils.AnimatedGifEncoder
 
         internal Rectangle ChangeRect { get; set; }
 
-        public Frame(string filename, ushort delay = 67, ColorQuantizationQuality quality = ColorQuantizationQuality.Reasonable)
+        string _filename = null;
+
+        public Frame(string filename, ushort delay = 8, ColorQuantizationQuality quality = ColorQuantizationQuality.Reasonable)
         {
-            this.Image = new Bitmap(filename);
+            if (filename == null)
+                throw new ArgumentNullException("filename");
+
+            this._filename = filename;
             this.Delay = delay;
             this.Quality = quality;
 
@@ -85,8 +90,13 @@ namespace FMUtils.AnimatedGifEncoder
         /// <summary>
         /// Extracts image pixels into byte array "pixels"
         /// </summary>
-        internal byte[] GetPixelBytes()
+        internal void LoadPixelBytes()
         {
+            if (this.Image == null && this._filename != null)
+            {
+                this.Image = new Bitmap(this._filename);
+            }
+
             // I'm pretty sure that "Format24bppRgb" is a lie, since the data is coming out BGR
             var ImgData = this.Image.LockBits(new Rectangle(0, 0, this.Image.Width, this.Image.Height), System.Drawing.Imaging.ImageLockMode.ReadOnly, System.Drawing.Imaging.PixelFormat.Format24bppRgb);
 
@@ -94,17 +104,16 @@ namespace FMUtils.AnimatedGifEncoder
             var ByteDepth = System.Drawing.Bitmap.GetPixelFormatSize(ImgData.PixelFormat) / 8;
             var Run = ImgData.Width * ByteDepth;
 
-            byte[] PixelBytes = new byte[ImgData.Width * ImgData.Height * ByteDepth];
+            this.PixelBytes = new byte[ImgData.Width * ImgData.Height * ByteDepth];
             var offset = 0;
 
             for (int i = 0; i < ImgData.Height; i++)
             {
-                Marshal.Copy(ImgData.Scan0 + (Run * i) + offset, PixelBytes, Run * i, Run);
+                Marshal.Copy(ImgData.Scan0 + (Run * i) + offset, this.PixelBytes, Run * i, Run);
                 offset += (ImgData.Stride - Run);
             }
 
             this.Image.UnlockBits(ImgData);
-            return PixelBytes;
         }
     }
 }

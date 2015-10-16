@@ -29,6 +29,9 @@ namespace FMUtils.AnimatedGifEncoder
 
         List<Frame> frames = new List<Frame>();
 
+        BlockingCollection<Frame> FrameLoadingQueue = new BlockingCollection<Frame>();
+        ManualResetEvent FrameLoadingComplete = new ManualResetEvent(false);
+
         BlockingCollection<Frame> ProcessingQueue = new BlockingCollection<Frame>();
         ManualResetEvent ProcessingComplete = new ManualResetEvent(false);
 
@@ -44,6 +47,8 @@ namespace FMUtils.AnimatedGifEncoder
             this.output = writeableStream;
             this.optimization = optimization;
             this.Repeat = repeat;
+
+            Task.Factory.StartNew(this.LoadFrames);
 
             // seems to be a bit faster if we leave one core of capacity for the calling thread
             var MDOP = 1;// Environment.ProcessorCount - 1;
@@ -73,6 +78,12 @@ namespace FMUtils.AnimatedGifEncoder
         {
             Trace.WriteLine(string.Format("Gif89a.Dispose [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId));
 
+            // by disposal, all frames have definitely been added
+            FrameLoadingQueue.CompleteAdding();
+            
+            // drain out the loading thread
+            FrameLoadingComplete.WaitOne();
+
             // drain out the processing threads
             ProcessingQueue.CompleteAdding();
 
@@ -92,7 +103,7 @@ namespace FMUtils.AnimatedGifEncoder
         }
 
         /// <summary>
-        /// Add a frame to the gif and queue it for processing. This method is thread safe.
+        /// Queue a frame to be loaded & processed. This method is thread safe.
         /// </summary>
         public void AddFrame(Frame frame)
         {
@@ -104,34 +115,44 @@ namespace FMUtils.AnimatedGifEncoder
             if (this.optimization.HasFlag(FrameOptimization.AutoTransparency) && frame.Transparent != Color.Empty)
                 throw new ArgumentException("Frames may not have a manually specified transparent color when using AutoTransparency optimization", "frame");
 
-            lock (_gif)
-            {
-                if (this.frames.Contains(frame))
-                    throw new ArgumentException("Frames may only be added once", "frame");
+            FrameLoadingQueue.Add(frame);
+        }
 
-                // first frame sets the image dimensions
-                if (this.Size == Size.Empty)
-                    this.Size = frame.Image.Size;
+        void LoadFrames()
+        {
+            Trace.WriteLine(string.Format("Gif89a.LoadFrames [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId));
+
+            while (!this.FrameLoadingQueue.IsCompleted)
+            {
+                var frame = this.FrameLoadingQueue.Take();
+
+                frame.LoadPixelBytes();
+
+                // we have to add the frame to the frames list before adding it to to the processing queue,
+                // but if the processing queue is closed, we need to take it back out again, since it won't be written
+                // this can happen when AddFrame is called after Dispose
+                lock (_gif)
+                {
+                    // first frame sets the image dimensions
+                    if (this.Size == Size.Empty)
+                        this.Size = frame.Image.Size;
+
+                    this.frames.Add(frame);
+
+                    try
+                    {
+                        this.ProcessingQueue.Add(frame);
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        this.frames.Remove(frame);
+                    }
+                }
             }
 
-            frame.PixelBytes = frame.GetPixelBytes();
+            Trace.WriteLine("Done", string.Format("Gif89a.LoadFrames [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId));
 
-            // we have to add the frame to the frames list before adding it to to the processing queue,
-            // but if the processing queue is closed, we need to take it back out again, since it won't be written
-            // this can happen when AddFrame is called after Dispose
-            lock (_gif)
-            {
-                this.frames.Add(frame);
-
-                try
-                {
-                    this.ProcessingQueue.Add(frame);
-                }
-                catch (InvalidOperationException)
-                {
-                    this.frames.Remove(frame);
-                }
-            }
+            FrameLoadingComplete.Set();
         }
 
         void ProcessFrames()
