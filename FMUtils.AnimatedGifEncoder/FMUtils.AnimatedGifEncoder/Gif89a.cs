@@ -146,7 +146,7 @@ namespace FMUtils.AnimatedGifEncoder
                 {
                     // first frame sets the image dimensions
                     if (this.Size == Size.Empty)
-                        this.Size = frame.Image.Size;
+                        this.Size = frame.Size;
 
                     this.frames.Add(frame);
 
@@ -349,7 +349,7 @@ namespace FMUtils.AnimatedGifEncoder
         {
             // Trace.WriteLine(string.Format("Gif89a.AnalyzeFrame [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId));
 
-            frame.ChangeRect = new Rectangle(0, 0, frame.Image.Width, frame.Image.Height);
+            frame.ChangeRect = new Rectangle(0, 0, frame.Size.Width, frame.Size.Height);
             frame.TransparentPixelIndexes = new bool[frame.PixelBytes.Length / 3];
 
             if (frame == this.frames.First())
@@ -365,9 +365,9 @@ namespace FMUtils.AnimatedGifEncoder
             var OpaqueFramePixelBytes = new MemoryStream();
             var FrameContributesChange = false;
 
-            var LeftmostChange = frame.Image.Width;
+            var LeftmostChange = frame.Size.Width;
             var RightmostChange = 0;
-            var TopmostChange = frame.Image.Height;
+            var TopmostChange = frame.Size.Height;
             var BottommostChange = 0;
 
             var prev = this.frames[this.frames.IndexOf(frame) - 1];
@@ -386,8 +386,8 @@ namespace FMUtils.AnimatedGifEncoder
                     // we can then clip the frame size to only this changed area
                     if (this.optimization.HasFlag(FrameOptimization.ClipFrame))
                     {
-                        var x = (i / 3) % frame.Image.Width;
-                        var y = (i / 3) / frame.Image.Width;
+                        var x = (i / 3) % frame.Size.Width;
+                        var y = (i / 3) / frame.Size.Width;
 
                         LeftmostChange = Math.Min(LeftmostChange, x);
                         RightmostChange = Math.Max(RightmostChange, x);
@@ -429,8 +429,8 @@ namespace FMUtils.AnimatedGifEncoder
             {
                 if (this.optimization.HasFlag(FrameOptimization.ClipFrame))
                 {
-                    var x = i % frame.Image.Width;
-                    var y = i / frame.Image.Width;
+                    var x = i % frame.Size.Width;
+                    var y = i / frame.Size.Width;
 
                     if (!frame.ChangeRect.Contains(x, y))
                         continue;

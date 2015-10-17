@@ -7,9 +7,10 @@ namespace FMUtils.AnimatedGifEncoder
     public class Frame : IDisposable
     {
         /// <summary>
-        /// Frame image data
+        /// Frame dimensions. This will only be set after the frame is loaded.
+        /// If an explicit gif size is set, it will be equal to that. Otherwise, it will be equal to the first frame's size.
         /// </summary>
-        public Bitmap Image { get; private set; }
+        public Size Size { get; private set; }
 
         /// <summary>
         /// Frame delay (1/100th second)
@@ -41,6 +42,8 @@ namespace FMUtils.AnimatedGifEncoder
         /// greater than 20 do not yield significant improvements in speed.
         /// </summary>
         public ColorQuantizationQuality Quality = ColorQuantizationQuality.Reasonable;
+
+        Bitmap Image;
 
         internal byte[] PixelBytes { get; set; }
         internal byte[] OpaqueFramePixelBytes { get; set; }
@@ -100,6 +103,8 @@ namespace FMUtils.AnimatedGifEncoder
             {
                 this.Image = new Bitmap(this._filename);
             }
+
+            this.Size = this.Image.Size;
 
             // I'm pretty sure that "Format24bppRgb" is a lie, since the data is coming out BGR
             var ImgData = this.Image.LockBits(new Rectangle(0, 0, this.Image.Width, this.Image.Height), System.Drawing.Imaging.ImageLockMode.ReadOnly, System.Drawing.Imaging.PixelFormat.Format24bppRgb);
