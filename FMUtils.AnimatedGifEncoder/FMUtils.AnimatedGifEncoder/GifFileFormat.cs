@@ -152,7 +152,7 @@ namespace FMUtils.AnimatedGifEncoder
             output.WriteByte((byte)(reserved | dispose | user | transparent));
 
             // delay in hundredths
-            WriteShort(output, (ushort)(frame.Delay / 10));
+            WriteShort(output, frame.Delay);
 
             // transparent color index
             output.WriteByte(transIndex);

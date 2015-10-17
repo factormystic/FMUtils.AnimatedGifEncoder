@@ -11,7 +11,7 @@ namespace FMUtils.AnimatedGifEncoder
         public Bitmap Image { get; private set; }
 
         /// <summary>
-        /// Frame delay (milliseconds)
+        /// Frame delay (1/100th second)
         /// </summary>
         public ushort Delay = 0;
 
@@ -56,7 +56,7 @@ namespace FMUtils.AnimatedGifEncoder
 
         string _filename = null;
 
-        public Frame(string filename, ushort delay = 8, ColorQuantizationQuality quality = ColorQuantizationQuality.Reasonable)
+        public Frame(string filename, ushort delay = 4, ColorQuantizationQuality quality = ColorQuantizationQuality.Reasonable)
         {
             if (filename == null)
                 throw new ArgumentNullException("filename");
@@ -80,7 +80,7 @@ namespace FMUtils.AnimatedGifEncoder
             //}
         }
 
-        public Frame(Bitmap image, ushort delay = 67, ColorQuantizationQuality quality = ColorQuantizationQuality.Reasonable)
+        public Frame(Bitmap image, ushort delay = 4, ColorQuantizationQuality quality = ColorQuantizationQuality.Reasonable)
         {
             this.Image = image;
             this.Delay = delay;
