@@ -1,9 +1,10 @@
-﻿using System.Drawing;
+﻿using System;
+using System.Drawing;
 using System.Runtime.InteropServices;
 
 namespace FMUtils.AnimatedGifEncoder
 {
-    public class Frame
+    public class Frame : IDisposable
     {
         /// <summary>
         /// Frame image data
@@ -54,12 +55,15 @@ namespace FMUtils.AnimatedGifEncoder
 
         internal Rectangle ChangeRect { get; set; }
 
+        bool _bitmapDisposalRequired = false;
         string _filename = null;
 
         public Frame(string filename, ushort delay = 4, ColorQuantizationQuality quality = ColorQuantizationQuality.Reasonable)
         {
             if (filename == null)
                 throw new ArgumentNullException("filename");
+
+            this._bitmapDisposalRequired = true;
 
             this._filename = filename;
             this.Delay = delay;
@@ -114,6 +118,24 @@ namespace FMUtils.AnimatedGifEncoder
             }
 
             this.Image.UnlockBits(ImgData);
+        }
+
+        public void Dispose()
+        {
+            if (this._bitmapDisposalRequired && this.Image != null)
+            {
+                this.Image.Dispose();
+                this.Image = null;
+            }
+
+            // only used during analysis, not frame write
+            this.PixelBytes = null;
+            this.OpaqueFramePixelBytes = null;
+            this.TransparentPixelIndexes = null;
+
+            // required for frame write
+            this.ColorTableBytes = null;
+            this.IndexedPixels = null;
         }
     }
 }

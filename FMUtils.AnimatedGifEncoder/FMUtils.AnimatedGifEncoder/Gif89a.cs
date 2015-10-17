@@ -30,6 +30,7 @@ namespace FMUtils.AnimatedGifEncoder
         List<Frame> frames = new List<Frame>();
 
         BlockingCollection<Frame> FrameLoadingQueue = new BlockingCollection<Frame>();
+        ManualResetEvent FrameLoadingDelay = new ManualResetEvent(true);
         ManualResetEvent FrameLoadingComplete = new ManualResetEvent(false);
 
         BlockingCollection<Frame> ProcessingQueue = new BlockingCollection<Frame>();
@@ -41,6 +42,7 @@ namespace FMUtils.AnimatedGifEncoder
         // lock object for this class's instance properties
         object _gif = new object();
 
+        int _processingTaskCount;
 
         public Gif89a(Stream writeableStream, FrameOptimization optimization = FrameOptimization.None, ushort repeat = 0)
         {
@@ -51,10 +53,10 @@ namespace FMUtils.AnimatedGifEncoder
             Task.Factory.StartNew(this.LoadFrames);
 
             // seems to be a bit faster if we leave one core of capacity for the calling thread
-            var MDOP = 1;// Environment.ProcessorCount - 1;
-            var tasks = new Task[MDOP];
+            this._processingTaskCount = 1;
+            var tasks = new Task[this._processingTaskCount];
 
-            for (int i = 0; i < MDOP; i++)
+            for (int i = 0; i < this._processingTaskCount; i++)
             {
                 tasks[i] = Task.Factory.StartNew(this.ProcessFrames);
             }
@@ -142,11 +144,22 @@ namespace FMUtils.AnimatedGifEncoder
                     try
                     {
                         this.ProcessingQueue.Add(frame);
+
+                        if (!this.optimization.HasFlag(FrameOptimization.DeferredStreamWrite) && this.ProcessingQueue.Count >= this._processingTaskCount)
+                        {
+                            Trace.WriteLine("Delaying frame loading...", string.Format("Gif89a.LoadFrames [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId));
+                            FrameLoadingDelay.Reset();
+                        }
                     }
                     catch (InvalidOperationException)
                     {
                         this.frames.Remove(frame);
                     }
+                }
+
+                if (!this.optimization.HasFlag(FrameOptimization.DeferredStreamWrite))
+                {
+                    FrameLoadingDelay.WaitOne();
                 }
             }
 
@@ -209,9 +222,23 @@ namespace FMUtils.AnimatedGifEncoder
                 while (nextFrameIndex < this.frames.Count && pendingFrames.Contains(this.frames[nextFrameIndex]))
                 {
                     this.WriteFrame(this.frames[nextFrameIndex]);
+
+                    // we're done with the raw frame data, so let it unload
+                    if (nextFrameIndex > 0)
+                    {
+                        // don't dispose the current frame, since it could be a "prev" frame for a frame that's currently being analyzed
+                        this.frames[nextFrameIndex - 1].Dispose();
+                    }
+
+                    // allow more frames to be loaded
+                    FrameLoadingDelay.Set();
+
                     nextFrameIndex++;
                 }
             }
+
+            // the final frame is now safe to dispose since there's no "next" for it to be a "prev" for
+            this.frames.Last().Dispose();
 
             GifFileFormat.WriteFileTrailer(output);
             output.Flush();
