@@ -109,7 +109,7 @@ namespace FMUtils.AnimatedGifEncoder
         /// </summary>
         public void AddFrame(Frame frame)
         {
-            Trace.WriteLine(string.Format("Gif89a.AddFrame [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId));
+            // Trace.WriteLine(string.Format("Gif89a.AddFrame [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId));
 
             if (frame == null)
                 throw new ArgumentNullException("frame");
@@ -177,9 +177,11 @@ namespace FMUtils.AnimatedGifEncoder
                 // todo: is it a bug that we'll block on take but then another thead will call CompleteAdding? what happens in that case?
                 var frame = ProcessingQueue.Take();
 
-                Trace.WriteLine("Analyzing frame...", string.Format("Gif89a.ProcessFrames [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId));
 
-                var start = DateTime.UtcNow;
+                Trace.WriteLine("Processing frame...", string.Format("Gif89a.ProcessFrames [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId));
+
+                var sw = new Stopwatch();
+                sw.Start();
 
                 // find transparent/opaque pixels and update the composite image
                 this.AnalyzeFrame(frame);
@@ -190,7 +192,8 @@ namespace FMUtils.AnimatedGifEncoder
                 // after analysis is complete, the frame is ready to be written out
                 FrameWriteQueue.Add(frame);
 
-                Trace.WriteLine("Done (" + (DateTime.UtcNow - start).TotalMilliseconds + ")", string.Format("Gif89a.ProcessFrames [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId));
+                sw.Stop();
+                Trace.WriteLine($"Done ({ sw.Elapsed })", string.Format("Gif89a.ProcessFrames [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId));
             }
 
             Trace.WriteLine("Done", string.Format("Gif89a.ProcessFrames [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId));
@@ -253,6 +256,9 @@ namespace FMUtils.AnimatedGifEncoder
         {
             Trace.WriteLine(string.Format("Gif89a.WriteFrame [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId));
 
+            var sw = new Stopwatch();
+            sw.Start();
+
             if (frame.OpaqueFramePixelBytes == null)
                 return;
 
@@ -313,11 +319,14 @@ namespace FMUtils.AnimatedGifEncoder
             // encode and write pixel data
             var lzw = new LZWEncoder(frame.ChangeRect.Width, frame.ChangeRect.Height, frame.IndexedPixels, 8);
             lzw.encode(this.output);
+
+            sw.Stop();
+            Trace.WriteLine($"Done ({ sw.Elapsed })", string.Format("Gif89a.WriteFrame [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId));
         }
 
         void AnalyzeFrame(Frame frame)
         {
-            Trace.WriteLine(string.Format("Gif89a.AnalyzeFrame [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId));
+            // Trace.WriteLine(string.Format("Gif89a.AnalyzeFrame [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId));
 
             frame.ChangeRect = new Rectangle(0, 0, frame.Image.Width, frame.Image.Height);
             frame.TransparentPixelIndexes = new bool[frame.PixelBytes.Length / 3];
@@ -382,7 +391,7 @@ namespace FMUtils.AnimatedGifEncoder
 
         void AnalyzePixels(Frame frame)
         {
-            Trace.WriteLine(string.Format("Gif89a.AnalyzePixels [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId));
+            // Trace.WriteLine(string.Format("Gif89a.AnalyzePixels [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId));
 
             // totally exclude the transparency color from the quantization process, if there is one
             // reduce the quantizer max color space by 1 if we need to reserve a color table slot for the transparent color
