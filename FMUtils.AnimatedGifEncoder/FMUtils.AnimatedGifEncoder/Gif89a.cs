@@ -126,7 +126,16 @@ namespace FMUtils.AnimatedGifEncoder
 
             while (!this.FrameLoadingQueue.IsCompleted)
             {
-                var frame = this.FrameLoadingQueue.Take();
+                Frame frame = null;
+                try
+                {
+                    frame = this.FrameLoadingQueue.Take();
+                }
+                catch (InvalidOperationException)
+                {
+                    Trace.WriteLine("No more frames to load", string.Format("Gif89a.LoadFrames [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId));
+                    break;
+                }
 
                 frame.LoadPixelBytes();
 
@@ -174,9 +183,17 @@ namespace FMUtils.AnimatedGifEncoder
 
             while (!ProcessingQueue.IsCompleted)
             {
-                // todo: is it a bug that we'll block on take but then another thead will call CompleteAdding? what happens in that case?
-                var frame = ProcessingQueue.Take();
+                Frame frame = null;
 
+                try
+                {
+                    frame = ProcessingQueue.Take();
+                }
+                catch (InvalidOperationException)
+                {
+                    Trace.WriteLine("No more frames to process", string.Format("Gif89a.ProcessFrames [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId));
+                    break;
+                }
 
                 Trace.WriteLine("Processing frame...", string.Format("Gif89a.ProcessFrames [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId));
 
@@ -210,11 +227,15 @@ namespace FMUtils.AnimatedGifEncoder
 
             while (!FrameWriteQueue.IsCompleted)
             {
-                var someFrame = FrameWriteQueue.Take();
-
-                if (someFrame == null)
+                Frame someFrame = null;
+                try
                 {
-                    Debugger.Break();
+                    someFrame = FrameWriteQueue.Take();
+                }
+                catch (InvalidOperationException)
+                {
+                    Trace.WriteLine("No more frames to write", string.Format("Gif89a.WriteGifToStream [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId));
+                    break;
                 }
 
                 // frame analysis could can (and does!) occur out-of-order
