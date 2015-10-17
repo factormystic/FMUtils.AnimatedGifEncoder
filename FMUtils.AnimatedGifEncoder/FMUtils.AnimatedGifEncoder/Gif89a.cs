@@ -44,11 +44,12 @@ namespace FMUtils.AnimatedGifEncoder
 
         int _processingTaskCount;
 
-        public Gif89a(Stream writeableStream, FrameOptimization optimization = FrameOptimization.None, ushort repeat = 0)
+        public Gif89a(Stream writeableStream, FrameOptimization optimization = FrameOptimization.None, ushort repeat = 0, Size? frameSize = null)
         {
             this.output = writeableStream;
             this.optimization = optimization;
             this.Repeat = repeat;
+            this.Size = frameSize ?? Size.Empty;
 
             Task.Factory.StartNew(this.LoadFrames);
 
@@ -137,14 +138,14 @@ namespace FMUtils.AnimatedGifEncoder
                     break;
                 }
 
-                frame.LoadPixelBytes();
+                frame.LoadPixelBytes(this.Size);
 
                 // we have to add the frame to the frames list before adding it to to the processing queue,
                 // but if the processing queue is closed, we need to take it back out again, since it won't be written
                 // this can happen when AddFrame is called after Dispose
                 lock (_gif)
                 {
-                    // first frame sets the image dimensions
+                    // first frame sets the image dimensions (unless specified in the constructor)
                     if (this.Size == Size.Empty)
                         this.Size = frame.Size;
 

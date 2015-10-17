@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Runtime.InteropServices;
 
 namespace FMUtils.AnimatedGifEncoder
@@ -97,11 +98,24 @@ namespace FMUtils.AnimatedGifEncoder
         /// <summary>
         /// Extracts image pixels into byte array "pixels"
         /// </summary>
-        internal void LoadPixelBytes()
+        internal void LoadPixelBytes(Size frameSize)
         {
             if (this.Image == null && this._filename != null)
             {
                 this.Image = new Bitmap(this._filename);
+            }
+
+            if (frameSize != Size.Empty && frameSize != this.Image.Size)
+            {
+                var originalImage = this.Image;
+                this.Image = new Bitmap(frameSize.Width, frameSize.Height);
+                this._bitmapDisposalRequired = true;
+
+                using (var g = Graphics.FromImage(this.Image))
+                {
+                    g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                    g.DrawImage(originalImage, 0, 0, this.Image.Width, this.Image.Height);
+                }
             }
 
             this.Size = this.Image.Size;
