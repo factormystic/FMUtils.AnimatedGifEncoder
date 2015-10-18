@@ -271,6 +271,8 @@ namespace FMUtils.AnimatedGifEncoder
 
                     nextFrameIndex++;
                 }
+
+                output.Flush();
             }
 
             // the final frame is now safe to dispose since there's no "next" for it to be a "prev" for
