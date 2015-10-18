@@ -256,6 +256,9 @@ namespace FMUtils.AnimatedGifEncoder
                 {
                     this.WriteFrame(this.frames[nextFrameIndex]);
 
+                    // no need to hang on to it here any more
+                    pendingFrames.Remove(someFrame);
+
                     // we're done with the raw frame data, so let it unload
                     if (nextFrameIndex > 0)
                     {
