@@ -88,9 +88,10 @@ namespace FMUtils.AnimatedGifEncoder
             //}
         }
 
-        public Frame(Bitmap image, ushort delay = 4, ColorQuantizationQuality quality = ColorQuantizationQuality.Reasonable)
+        public Frame(Bitmap image, bool isBitmapDisposalRequired = false, ushort delay = 4, ColorQuantizationQuality quality = ColorQuantizationQuality.Reasonable)
         {
             this.Image = image;
+            this._bitmapDisposalRequired = isBitmapDisposalRequired;
             this.Delay = delay;
             this.Quality = quality;
         }
