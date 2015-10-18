@@ -108,7 +108,7 @@ namespace FMUtils.AnimatedGifEncoder
         /// <summary>
         /// Queue a frame to be loaded & processed. This method is thread safe.
         /// </summary>
-        public void AddFrame(Frame frame)
+        public bool AddFrame(Frame frame)
         {
             // Trace.WriteLine(string.Format("Gif89a.AddFrame [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId));
 
@@ -118,7 +118,15 @@ namespace FMUtils.AnimatedGifEncoder
             if (this.optimization.HasFlag(FrameOptimization.AutoTransparency) && frame.Transparent != Color.Empty)
                 throw new ArgumentException("Frames may not have a manually specified transparent color when using AutoTransparency optimization", "frame");
 
-            FrameLoadingQueue.Add(frame);
+            try
+            {
+                FrameLoadingQueue.Add(frame);
+                return true;
+            }
+            catch (InvalidOperationException)
+            {
+                return false;
+            }
         }
 
         void LoadFrames()
