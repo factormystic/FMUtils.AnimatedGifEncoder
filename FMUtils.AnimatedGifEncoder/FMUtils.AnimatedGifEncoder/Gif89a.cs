@@ -269,7 +269,10 @@ namespace FMUtils.AnimatedGifEncoder
             }
 
             // the final frame is now safe to dispose since there's no "next" for it to be a "prev" for
-            this.frames.Last().Dispose();
+            if (this.frames.Any())
+            {
+                this.frames.Last().Dispose();
+            }
 
             GifFileFormat.WriteFileTrailer(output);
             output.Flush();
