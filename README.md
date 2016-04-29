@@ -21,3 +21,10 @@ using (var fs = new FileStream("cool.gif", FileMode.Create, FileAccess.ReadWrite
 
 // ...and now, cool.gif exists & is your pics, animated!
 ```
+
+### Todo
+
+* [ ] allow frame change region to be passed in with the frame
+* [ ] allow frame quantization to be delegated (something like `IFrameQuantizer`)
+* [ ] retool `AddFrame` to accept `IFrame`s
+* [ ] refactor the threading logic to use reactive scheduling
