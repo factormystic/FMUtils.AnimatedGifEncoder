@@ -25,6 +25,20 @@ namespace FMUtils.AnimatedGifEncoder
 
         public FrameOptimization optimization { get; private set; }
 
+        /// <summary>
+        /// This event is fired when a frame has been written to the output stream, or if write is deferred, when a frame has been processed
+        /// </summary>
+        public event EventHandler<FrameWriteProgressEventArgs> OnFrameWriteProgress;
+
+        public class FrameWriteProgressEventArgs : EventArgs
+        {
+            public float Progress { get; private set; }
+            public FrameWriteProgressEventArgs(float progress)
+            {
+                this.Progress = progress;
+            }
+        }
+
         Stream output;
 
         List<Frame> frames = new List<Frame>();
@@ -261,6 +275,8 @@ namespace FMUtils.AnimatedGifEncoder
 
                     // allow more frames to be loaded
                     FrameLoadingDelay.Set();
+
+                    this.OnFrameWriteProgress?.Invoke(this, new FrameWriteProgressEventArgs((float)nextFrameIndex * 100.0f / (float)(this.frames.Count + this.FrameLoadingQueue.Count)));
 
                     nextFrameIndex++;
                 }
