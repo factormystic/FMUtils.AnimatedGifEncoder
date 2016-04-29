@@ -53,23 +53,16 @@ namespace FMUtils.AnimatedGifEncoder
 
             Task.Factory.StartNew(this.LoadFrames);
 
-            // seems to be a bit faster if we leave one core of capacity for the calling thread
-            this._processingTaskCount = 1;
-            var tasks = new Task[this._processingTaskCount];
-
-            for (int i = 0; i < this._processingTaskCount; i++)
-            {
-                tasks[i] = Task.Factory.StartNew(this.ProcessFrames);
-            }
+            this._processingTaskCount = Math.Max(1, Environment.ProcessorCount - 1);
 
             // after all the workers complete, mark the completion queue as finished
-            Task.Factory.StartNew(new Action(() =>
+            Task.Factory.ContinueWhenAll(Enumerable.Range(0, this._processingTaskCount)
+                .Select(_ => Task.Factory.StartNew(this.ProcessFrames))
+                .ToArray(), _ =>
             {
-                Task.WaitAll(tasks);
-
                 Debug.WriteLine("Processing complete", string.Format("Gif89a [{0}]", System.Threading.Thread.CurrentThread.ManagedThreadId));
                 ProcessingComplete.Set();
-            }));
+            });
 
             if (!this.optimization.HasFlag(FrameOptimization.DeferredStreamWrite))
             {
