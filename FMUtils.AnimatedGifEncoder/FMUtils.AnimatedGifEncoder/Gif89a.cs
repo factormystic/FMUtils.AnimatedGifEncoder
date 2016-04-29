@@ -44,7 +44,7 @@ namespace FMUtils.AnimatedGifEncoder
 
         int _processingTaskCount;
 
-        public Gif89a(Stream writeableStream, FrameOptimization optimization = FrameOptimization.None, ushort repeat = 0, Size? frameSize = null)
+        public Gif89a(Stream writeableStream, FrameOptimization optimization = FrameOptimization.Default, ushort repeat = 0, Size? frameSize = null)
         {
             this.output = writeableStream;
             this.optimization = optimization;

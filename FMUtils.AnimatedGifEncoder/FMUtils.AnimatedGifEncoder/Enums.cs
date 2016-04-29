@@ -24,6 +24,11 @@ namespace FMUtils.AnimatedGifEncoder
         None = 0,
 
         /// <summary>
+        /// AutoTransparency | ClipFrame | DiscardDuplicates
+        /// </summary>
+        Default = AutoTransparency | ClipFrame | DiscardDuplicates,
+
+        /// <summary>
         /// Checks each frame to see if it's identical to the previous frame.
         /// If so, it will extend the duration of the previous frame and skip writing the current frame.
         /// If there are many duplicate frames, this optimization can greatly speed up processing since fewer quantizations can be run.
